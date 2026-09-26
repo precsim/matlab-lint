@@ -20,6 +20,12 @@ fn visit(node: Node<'_>, source: &str, zones: &[PreservationZone], edits: &mut V
         ";" if token_allowed(node, zones) => {
             remove_space_before(node.start_byte(), source, zones, "F008", edits);
         }
+        "<" | "<=" | "==" | "~=" | ">=" | ">" | "&&" | "||"
+            if comparison_or_boolean_operator(node) && token_allowed(node, zones) =>
+        {
+            normalize_inline_space_before(node.start_byte(), source, zones, "F009", edits);
+            normalize_space_after(node.end_byte(), source, zones, "F009", edits);
+        }
         _ => {}
     }
 
@@ -65,6 +71,34 @@ fn normalize_space_before(
     let bytes = source.as_bytes();
     let start = horizontal_start(bytes, position);
     if start == position && matches!(bytes[position - 1], b'\n' | b'\r') {
+        return;
+    }
+
+    let existing = &source[start..position];
+    if existing == " " {
+        return;
+    }
+
+    let range = ByteRange::new(start, position);
+    if edit_allowed(RuleCategory::Structural, range, zones) {
+        edits.push(Edit::new(range.start, range.end, " ", rule_id));
+    }
+}
+
+fn normalize_inline_space_before(
+    position: usize,
+    source: &str,
+    zones: &[PreservationZone],
+    rule_id: &str,
+    edits: &mut Vec<Edit>,
+) {
+    if position == 0 {
+        return;
+    }
+
+    let bytes = source.as_bytes();
+    let start = horizontal_start(bytes, position);
+    if start == 0 || matches!(bytes[start - 1], b'\n' | b'\r') {
         return;
     }
 
@@ -159,6 +193,12 @@ fn assignment_equals(node: Node<'_>) -> bool {
     })
 }
 
+fn comparison_or_boolean_operator(node: Node<'_>) -> bool {
+    node.parent().is_some_and(|parent| {
+        matches!(parent.kind(), "comparison_operator" | "boolean_operator")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::formatter::{FormatterOptions, format_source};
@@ -175,6 +215,40 @@ mod tests {
         assert_eq!(
             outcome.output(),
             "function y = f(x)\n  A = [1,2;3,4];\n  y = max(x, 2);\nend\n"
+        );
+    }
+
+    #[test]
+    fn formats_comparison_and_short_circuit_boolean_operators() {
+        let source = SourceFile::new(
+            "operators.m",
+            "function y=f(x)\ny=(x>0)&&(x<=10)||x~=3;\nend\n",
+        );
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f(x)\n  y = (x > 0) && (x <= 10) || x ~= 3;\nend\n"
+        );
+        assert!(
+            outcome
+                .edits()
+                .iter()
+                .any(|edit| edit.rule_id == "F009")
+        );
+    }
+
+    #[test]
+    fn comparison_spacing_preserves_matrix_contents_and_unary_not() {
+        let source = SourceFile::new(
+            "operators.m",
+            "function y=f(x)\nA=[x>0, x<1];\ny=~x||(x>=2);\nend\n",
+        );
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f(x)\n  A = [x>0, x<1];\n  y = ~x || (x >= 2);\nend\n"
         );
     }
 }
