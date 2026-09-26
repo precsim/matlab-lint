@@ -129,9 +129,9 @@ fn collect_multiple_statements(node: Node<'_>, diagnostics: &mut BTreeMap<usize,
 
             let row = child.start_position().row;
             if first_by_row.insert(row, child.start_byte()).is_some() {
-                diagnostics.entry(row).or_insert_with(|| {
-                    ByteRange::new(child.start_byte(), child.end_byte())
-                });
+                diagnostics
+                    .entry(row)
+                    .or_insert_with(|| ByteRange::new(child.start_byte(), child.end_byte()));
             }
         }
     }
