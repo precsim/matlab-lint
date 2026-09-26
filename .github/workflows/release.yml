@@ -82,6 +82,13 @@ jobs:
           "$binary" lint smoke.m
           "$binary" check smoke.m
 
+          printf 'x=1 ;\n' > format-smoke.m
+          "$binary" fmt format-smoke.m
+          test "$(cat format-smoke.m)" = "x = 1;"
+
+          formatted="$(printf 'x=1 ;' | "$binary" fmt --stdin)"
+          test "$formatted" = "x = 1;"
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.artifact }}
@@ -137,6 +144,13 @@ jobs:
           printf 'x = 1;\n' > clean.m
           "$binary" lint clean.m
           "$binary" check clean.m
+
+          printf 'x=1 ;\n' > format-smoke.m
+          "$binary" fmt format-smoke.m
+          test "$(cat format-smoke.m)" = "x = 1;"
+
+          formatted="$(printf 'x=1 ;' | "$binary" fmt --stdin)"
+          test "$formatted" = "x = 1;"
 
           printf 'a = 1; b = 2;\n' > violation.m
           set +e

@@ -27,11 +27,13 @@ For each target, the workflow:
 1. builds the release binary with the committed `Cargo.lock`,
 2. runs `mstyle --version`,
 3. runs `lint` and `check` against a clean smoke fixture,
-4. uploads the staged binary and checksum as workflow artifacts,
-5. downloads those artifacts into a fresh job that does not install Rust, MATLAB, or Octave,
-6. verifies the checksum,
-7. verifies a clean source exits with `0`,
-8. verifies a known lint violation exits with `1`.
+4. verifies in-place `fmt` output and `fmt --stdin` streaming output,
+5. uploads the staged binary and checksum as workflow artifacts,
+6. downloads those artifacts into a fresh job that does not install Rust, MATLAB, or Octave,
+7. verifies the checksum,
+8. repeats standalone formatter/linter checks from the packaged artifact,
+9. verifies a clean source exits with `0`,
+10. verifies a known lint violation exits with `1`.
 
 Only after all packaged-binary smoke jobs pass does a tag-triggered workflow upload the assets to the GitHub Release.
 

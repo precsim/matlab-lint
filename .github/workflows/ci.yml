@@ -38,6 +38,13 @@ jobs:
           "$binary" lint binary-smoke.m
           "$binary" check binary-smoke.m
 
+          printf 'x=1 ;\n' > format-smoke.m
+          "$binary" fmt format-smoke.m
+          test "$(cat format-smoke.m)" = "x = 1;"
+
+          formatted="$(printf 'x=1 ;' | "$binary" fmt --stdin)"
+          test "$formatted" = "x = 1;"
+
       - name: Benchmark smoke
         run: MSTYLE_BENCH_ITERS=10 cargo run --locked --release --example benchmark
 
@@ -92,3 +99,10 @@ jobs:
           printf 'x = 1;\n' > binary-smoke.m
           "$binary" lint binary-smoke.m
           "$binary" check binary-smoke.m
+
+          printf 'x=1 ;\n' > format-smoke.m
+          "$binary" fmt format-smoke.m
+          test "$(cat format-smoke.m)" = "x = 1;"
+
+          formatted="$(printf 'x=1 ;' | "$binary" fmt --stdin)"
+          test "$formatted" = "x = 1;"
