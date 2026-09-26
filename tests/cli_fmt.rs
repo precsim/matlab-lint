@@ -79,7 +79,6 @@ fn malformed_fmt_applies_only_safe_cleanup_and_returns_source_status() {
     fs::remove_dir_all(directory).expect("remove temp directory");
 }
 
-
 #[test]
 fn fmt_stdin_writes_formatted_source_to_stdout() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_mstyle"))
@@ -104,7 +103,10 @@ fn fmt_stdin_writes_formatted_source_to_stdout() {
         "fmt --stdin failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8(output.stdout).expect("stdout UTF-8"), "x = 1;\n");
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("stdout UTF-8"),
+        "x = 1;\n"
+    );
     assert!(output.stderr.is_empty());
 }
 
