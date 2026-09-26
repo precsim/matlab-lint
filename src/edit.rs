@@ -36,7 +36,7 @@ pub fn normalize_edits(source_len: usize, mut edits: Vec<Edit>) -> Result<Vec<Ed
     for edit in &edits {
         if !edit.range.is_valid_for(source_len) {
             return Err(EditError::InvalidRange {
-                edit: edit.clone(),
+                edit: Box::new(edit.clone()),
                 source_len,
             });
         }
@@ -67,8 +67,8 @@ pub fn normalize_edits(source_len: usize, mut edits: Vec<Edit>) -> Result<Vec<Ed
 
             if edits_conflict(previous, &edit) {
                 return Err(EditError::Conflict {
-                    first: previous.clone(),
-                    second: edit,
+                    first: Box::new(previous.clone()),
+                    second: Box::new(edit),
                 });
             }
         }
@@ -80,6 +80,14 @@ pub fn normalize_edits(source_len: usize, mut edits: Vec<Edit>) -> Result<Vec<Ed
 }
 
 pub fn apply_edits(source: &str, edits: Vec<Edit>) -> Result<String, EditError> {
+    for edit in &edits {
+        if !source.is_char_boundary(edit.range.start) || !source.is_char_boundary(edit.range.end) {
+            return Err(EditError::InvalidUtf8Boundary {
+                edit: Box::new(edit.clone()),
+            });
+        }
+    }
+
     let edits = normalize_edits(source.len(), edits)?;
     let mut output = String::with_capacity(source.len());
     let mut cursor = 0;
@@ -110,8 +118,17 @@ fn edits_conflict(left: &Edit, right: &Edit) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditError {
-    InvalidRange { edit: Edit, source_len: usize },
-    Conflict { first: Edit, second: Edit },
+    InvalidRange {
+        edit: Box<Edit>,
+        source_len: usize,
+    },
+    InvalidUtf8Boundary {
+        edit: Box<Edit>,
+    },
+    Conflict {
+        first: Box<Edit>,
+        second: Box<Edit>,
+    },
 }
 
 impl fmt::Display for EditError {
@@ -121,6 +138,11 @@ impl fmt::Display for EditError {
                 formatter,
                 "edit {}..{} from {} is invalid for source length {}",
                 edit.range.start, edit.range.end, edit.rule_id, source_len
+            ),
+            Self::InvalidUtf8Boundary { edit } => write!(
+                formatter,
+                "edit {}..{} from {} is not aligned to UTF-8 character boundaries",
+                edit.range.start, edit.range.end, edit.rule_id
             ),
             Self::Conflict { first, second } => write!(
                 formatter,
@@ -155,6 +177,14 @@ mod tests {
         .expect("disjoint edits should apply");
 
         assert_eq!(output, "ABcdEF");
+    }
+
+    #[test]
+    fn rejects_edits_inside_utf8_scalars() {
+        let error = apply_edits("é", vec![Edit::new(1, 1, "x", "F001")])
+            .expect_err("UTF-8 interior offset must fail");
+
+        assert!(matches!(error, EditError::InvalidUtf8Boundary { .. }));
     }
 
     #[test]
