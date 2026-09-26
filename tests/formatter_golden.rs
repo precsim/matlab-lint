@@ -42,6 +42,12 @@ fn formatter_golden_fixtures_are_exact_idempotent_and_parse_safe() {
             expected: include_str!("fixtures/formatter/comparison/expected.m"),
             parses_cleanly: true,
         },
+        Fixture {
+            name: "binary",
+            input: include_str!("fixtures/formatter/binary/input.m"),
+            expected: include_str!("fixtures/formatter/binary/expected.m"),
+            parses_cleanly: true,
+        },
     ];
 
     for fixture in fixtures {

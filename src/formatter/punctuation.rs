@@ -26,6 +26,13 @@ fn visit(node: Node<'_>, source: &str, zones: &[PreservationZone], edits: &mut V
             normalize_inline_space_before(node.start_byte(), source, zones, "F009", edits);
             normalize_space_after(node.end_byte(), source, zones, "F009", edits);
         }
+        "+" | ".+" | "-" | ".-" | "*" | ".*" | "/" | "./" | "\\" | ".\\" | "^" | ".^"
+        | "|" | "&"
+            if binary_operator(node) && token_allowed(node, zones) =>
+        {
+            normalize_inline_space_before(node.start_byte(), source, zones, "F010", edits);
+            normalize_space_after(node.end_byte(), source, zones, "F010", edits);
+        }
         _ => {}
     }
 
@@ -198,6 +205,11 @@ fn comparison_or_boolean_operator(node: Node<'_>) -> bool {
         .is_some_and(|parent| matches!(parent.kind(), "comparison_operator" | "boolean_operator"))
 }
 
+fn binary_operator(node: Node<'_>) -> bool {
+    node.parent()
+        .is_some_and(|parent| parent.kind() == "binary_operator")
+}
+
 #[cfg(test)]
 mod tests {
     use crate::formatter::{FormatterOptions, format_source};
@@ -244,5 +256,32 @@ mod tests {
             outcome.output(),
             "function y = f(x)\n  A = [x>0, x<1];\n  y = ~x || (x >= 2);\nend\n"
         );
+    }
+
+    #[test]
+    fn formats_binary_operators_but_preserves_unary_and_matrix_contents() {
+        let source = SourceFile::new(
+            "binary.m",
+            "function y=f(a,b,c,d,z)\nA=[1 -2;3 +4];\ny=-a+b*c./d^2+ +z;\nend\n",
+        );
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f(a, b, c, d, z)\n  A = [1 -2;3 +4];\n  y = -a + b * c ./ d ^ 2 + +z;\nend\n"
+        );
+        assert!(outcome.edits().iter().any(|edit| edit.rule_id == "F010"));
+    }
+
+    #[test]
+    fn compact_numeric_dot_operator_ambiguity_stays_unchanged() {
+        let source = SourceFile::new("ambiguous.m", "function y=f(a)\ny=1./a;\nend\n");
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f(a)\n  y = 1./a;\nend\n"
+        );
+        assert!(!outcome.edits().iter().any(|edit| edit.rule_id == "F010"));
     }
 }
