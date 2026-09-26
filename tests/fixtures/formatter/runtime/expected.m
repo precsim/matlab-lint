@@ -1,3 +1,3 @@
 x = 2;
 y = x+3;
-assert(y==5);
+assert(y == 5);
