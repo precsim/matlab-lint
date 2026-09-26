@@ -174,40 +174,6 @@ mod tests {
     }
 
     #[test]
-    fn probe_missing_recovery_candidates() {
-        let candidates = [
-            ("unclosed_paren", "x = (1 + 2\n"),
-            ("missing_end", "if true\n  x = 1;\n"),
-            ("missing_condition", "if\nend\n"),
-            ("missing_rhs", "x = 1 + ;\n"),
-            ("unclosed_matrix", "x = [1 2\n"),
-            ("unclosed_cell", "x = {1, 2\n"),
-            ("unclosed_call", "x = foo(1, 2\n"),
-            ("double_comma", "x = foo(1,,2);\n"),
-            ("missing_for_end", "for i = 1:3\n  x = i;\n"),
-            ("missing_function_end", "function y = f(x)\n  y = x;\n"),
-            ("missing_switch_end", "switch x\ncase 1\n  y = 1;\n"),
-        ];
-
-        let mut found = Vec::new();
-        let mut trees = Vec::new();
-
-        for (name, text) in candidates {
-            let result = parse_fixture(name, text);
-            if result
-                .diagnostics()
-                .iter()
-                .any(|diagnostic| matches!(diagnostic.kind, ParseIssueKind::Missing { .. }))
-            {
-                found.push(name);
-            }
-            trees.push((name, result.tree().root_node().to_sexp()));
-        }
-
-        panic!("missing-node candidates: {found:?}; trees: {trees:#?}");
-    }
-
-    #[test]
     fn missing_recovery_is_reported_and_blocks_structural_formatting() {
         let source = include_str!("../tests/fixtures/parser/malformed_missing.m");
         let result = parse_fixture("malformed_missing.m", source);
