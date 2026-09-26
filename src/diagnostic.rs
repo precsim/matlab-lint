@@ -27,10 +27,7 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn from_parse(
-        path: &Path,
-        diagnostic: &ParseDiagnostic,
-    ) -> Self {
+    pub fn from_parse(path: &Path, diagnostic: &ParseDiagnostic) -> Self {
         Self {
             rule: "PARSE".to_owned(),
             severity: Severity::Error,
