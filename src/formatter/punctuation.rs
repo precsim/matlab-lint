@@ -194,9 +194,8 @@ fn assignment_equals(node: Node<'_>) -> bool {
 }
 
 fn comparison_or_boolean_operator(node: Node<'_>) -> bool {
-    node.parent().is_some_and(|parent| {
-        matches!(parent.kind(), "comparison_operator" | "boolean_operator")
-    })
+    node.parent()
+        .is_some_and(|parent| matches!(parent.kind(), "comparison_operator" | "boolean_operator"))
 }
 
 #[cfg(test)]
@@ -230,12 +229,7 @@ mod tests {
             outcome.output(),
             "function y = f(x)\n  y = (x > 0) && (x <= 10) || x ~= 3;\nend\n"
         );
-        assert!(
-            outcome
-                .edits()
-                .iter()
-                .any(|edit| edit.rule_id == "F009")
-        );
+        assert!(outcome.edits().iter().any(|edit| edit.rule_id == "F009"));
     }
 
     #[test]
