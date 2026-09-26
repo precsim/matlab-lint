@@ -21,7 +21,11 @@ pub struct Cli {
 pub enum Command {
     /// Check formatting and lint diagnostics without modifying files.
     Check {
-        /// Files or directories to check. Discovery is implemented in a later phase.
+        /// Check only MATLAB files changed relative to the merge-base with BASE.
+        #[arg(long, value_name = "BASE", conflicts_with = "paths")]
+        diff: Option<String>,
+
+        /// Files or directories to check. Defaults to the current directory.
         #[arg(value_name = "PATH")]
         paths: Vec<PathBuf>,
 
@@ -36,14 +40,18 @@ pub enum Command {
         #[arg(long)]
         check: bool,
 
-        /// Files or directories to format. Discovery is implemented in a later phase.
+        /// Format-check only MATLAB files changed relative to the merge-base with BASE.
+        #[arg(long, value_name = "BASE", conflicts_with = "paths", requires = "check")]
+        diff: Option<String>,
+
+        /// Files or directories to format. Defaults to the current directory.
         #[arg(value_name = "PATH")]
         paths: Vec<PathBuf>,
     },
 
     /// Run lint diagnostics without modifying files.
     Lint {
-        /// Files or directories to lint. Discovery is implemented in a later phase.
+        /// Files or directories to lint. Defaults to the current directory.
         #[arg(value_name = "PATH")]
         paths: Vec<PathBuf>,
 
@@ -79,25 +87,39 @@ mod tests {
         assert_eq!(cli.config, Some(PathBuf::from("custom.toml")));
 
         match cli.command {
-            Command::Check { paths, format } => {
+            Command::Check {
+                paths,
+                format,
+                diff,
+            } => {
                 assert_eq!(paths, vec![PathBuf::from("src")]);
                 assert_eq!(format, OutputFormat::Json);
+                assert_eq!(diff, None);
             }
             other => panic!("unexpected command: {other:?}"),
         }
     }
 
     #[test]
-    fn parses_fmt_check_command() {
-        let cli = Cli::try_parse_from(["mstyle", "fmt", "--check", "example.m"])
+    fn parses_fmt_check_diff_command() {
+        let cli = Cli::try_parse_from(["mstyle", "fmt", "--check", "--diff", "origin/main"])
             .expect("CLI should parse");
 
         match cli.command {
-            Command::Fmt { paths, check } => {
+            Command::Fmt { paths, check, diff } => {
                 assert!(check);
-                assert_eq!(paths, vec![PathBuf::from("example.m")]);
+                assert!(paths.is_empty());
+                assert_eq!(diff.as_deref(), Some("origin/main"));
             }
             other => panic!("unexpected command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn rejects_mutating_fmt_diff() {
+        assert!(
+            Cli::try_parse_from(["mstyle", "fmt", "--diff", "origin/main"]).is_err(),
+            "--diff must require --check"
+        );
     }
 }
