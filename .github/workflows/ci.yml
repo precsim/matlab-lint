@@ -28,6 +28,9 @@ jobs:
       - name: Release build
         run: cargo build --release
 
+      - name: Benchmark smoke
+        run: MSTYLE_BENCH_ITERS=10 cargo run --release --example benchmark
+
       - name: Install Octave
         run: |
           sudo apt-get update
@@ -45,3 +48,22 @@ jobs:
 
       - name: mstyle self-check lint
         run: cargo run --release -- lint tests/selfcheck
+
+  build-platforms:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Release build
+        run: cargo build --release
