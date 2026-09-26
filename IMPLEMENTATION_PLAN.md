@@ -47,6 +47,10 @@ Reasons:
 
 Use `tree-sitter` with `tree-sitter-matlab` for structural information.
 
+Pin `tree-sitter-matlab` to an exact tested Cargo version or Git revision. Parser upgrades must be deliberate changes with the parser/golden corpus rerun, because grammar changes can alter parse structure and formatter safety assumptions.
+
+Tree-sitter is a structural aid, not a semantic oracle for MATLAB. A successful parse, or an unchanged normalized parse tree, does not by itself prove that a rewrite preserves MATLAB semantics. Maintain explicit regression fixtures for known grammar ambiguities and constructs where valid MATLAB can be parsed differently than MATLAB evaluates it; for example, the grammar's handling of compact operator forms such as `1./a` must be guarded before structural rules are allowed to edit around that region.
+
 Do not regenerate source from the syntax tree. Preserve the original source and apply only explicit byte-range edits.
 
 Conceptual pipeline:
@@ -86,9 +90,20 @@ struct Edit {
 Edits must be:
 
 1. sorted,
-2. non-overlapping,
+2. conflict-free,
 3. deterministic,
 4. validated before writing.
+
+Use half-open byte ranges, but do not treat ordinary range non-overlap as a complete conflict rule. In particular, multiple zero-length insertions at the same byte offset are order-dependent even though their ranges do not overlap.
+
+The edit combiner must therefore reject or explicitly coalesce ambiguous combinations, including:
+
+- multiple insertions at the same byte boundary,
+- duplicate edits with different replacements,
+- an insertion on a replacement/deletion boundary when ordering would affect output,
+- overlapping replacement/deletion ranges.
+
+Identical duplicate edits may be deduplicated. Any permitted coalescing or rule precedence must be explicit and covered by tests; otherwise fail safely instead of choosing an incidental iteration order.
 
 ## 4. CLI surface
 
@@ -225,17 +240,25 @@ Candidates for later versions:
 
 ## 7. Explicit preservation zones
 
-The formatter should initially avoid internal rewrites in syntax where MATLAB whitespace is risky or formatting policy is subjective.
+The formatter should initially avoid internal structural/punctuation rewrites in syntax where MATLAB whitespace is risky or formatting policy is subjective.
 
-Preserve:
+Preserve from F004-F008 and other structural rules:
 
 - matrix literal contents,
 - cell literal contents where spacing could affect parsing,
 - strings and character vectors,
 - comments,
 - command-form syntax,
-- incomplete/error nodes,
+- incomplete/error-recovery regions,
 - continuation alignment beyond block indentation.
+
+Preservation is rule-specific rather than an absolute byte-range ban. Explicitly safe lexical cleanup may touch otherwise preserved regions only where its behavior is independent of MATLAB parsing. Initially:
+
+- F001 may remove trailing horizontal whitespace at the physical end of a line, including after a comment,
+- F002 may normalize the final EOF newline,
+- F003 may normalize line endings when enabled.
+
+No structural/punctuation rule may use these lexical exceptions as permission to rewrite inside a preservation zone. Tests must assert the allowed edit domains for each rule category.
 
 For example:
 
@@ -274,13 +297,15 @@ These transformations create noisy diffs or can alter MATLAB semantics.
 
 Parse each file before applying structural edits.
 
-If the parse contains error nodes, permit only lexical rules that are provably independent of syntax, initially:
+Use the root node's Tree-sitter error state (for example, `root_node().has_error()`) as the authoritative structural-formatting gate. Do not implement this gate by searching only for explicit `ERROR` nodes: Tree-sitter recovery can also insert `MISSING` nodes.
 
-- F001 trailing whitespace,
-- F002 EOF newline,
-- optionally F003 line endings.
+When the root reports an error:
 
-Do not apply indentation/operator/structural edits to a file with unresolved parse errors.
+- emit deterministic parse diagnostics that account for both explicit `ERROR` nodes and `MISSING` recovery nodes,
+- permit only lexical rules that are provably independent of syntax, initially F001 trailing whitespace, F002 EOF newline, and optionally F003 line endings,
+- do not apply indentation/operator/structural edits.
+
+Tests must include malformed inputs that recover through explicit `ERROR` nodes and through `MISSING` nodes, and both must block F004-F008.
 
 ### Transactional formatting
 
@@ -288,8 +313,8 @@ Formatting flow:
 
 1. parse original,
 2. compute edits,
-3. verify edits are non-overlapping,
-4. apply edits in memory,
+3. validate the complete edit set against the conflict policy,
+4. apply edits in memory in one deterministic pass,
 5. parse result,
 6. validate the result,
 7. write only if validation succeeds.
@@ -300,9 +325,11 @@ On validation failure, leave the file unchanged and return an internal safety di
 
 For formatter-only changes, compare normalized syntax structure before and after formatting where practical.
 
-The comparison should ignore trivia intentionally owned by the formatter but detect meaningful syntax changes.
+The comparison should ignore trivia intentionally owned by the formatter but detect meaningful syntax changes. Treat this only as a consistency check, never as proof of semantic equivalence: a grammar can parse the same bytes successfully yet assign a structure that does not match MATLAB's interpretation.
 
-This will need corpus-driven refinement because Tree-sitter error recovery and grammar ambiguities can make naive tree equality too strict.
+Maintain regression fixtures for known grammar ambiguities and any newly discovered mismatch. Structural rules must avoid editing ambiguous regions unless a focused guard/test establishes that the specific transformation is safe. Parser-version upgrades must rerun this corpus before merge.
+
+This will need corpus-driven refinement because Tree-sitter error recovery and grammar ambiguities can make naive tree equality either too strict or falsely reassuring.
 
 ### Idempotence
 
@@ -391,7 +418,7 @@ serde
 serde_json
 toml
 tree-sitter
-tree-sitter-matlab
+tree-sitter-matlab # pin exact tested version/revision
 ignore
 ```
 
@@ -405,7 +432,7 @@ Testing has three distinct layers.
 
 Use for:
 
-- edit ordering and overlap rejection,
+- edit ordering and conflict rejection, including same-offset insertions and boundary conflicts,
 - config parsing,
 - source position calculations,
 - rule behavior,
@@ -431,8 +458,11 @@ Assert:
 
 1. formatting `input.m` produces exactly `expected.m`,
 2. formatting `expected.m` produces no change,
-3. no formatter edit overlaps a preservation zone,
-4. output reparses successfully when input parsed successfully.
+3. every formatter edit stays within the byte domains permitted for that rule category, including the narrow F001-F003 lexical exceptions,
+4. output reparses successfully when input parsed successfully,
+5. structural rules make no edit in a known parser-ambiguity guard region unless that transformation has a focused safety fixture.
+
+Reparsing is a consistency check, not a semantic-equivalence proof.
 
 Include adversarial MATLAB syntax early:
 
@@ -447,7 +477,10 @@ Include adversarial MATLAB syntax early:
 - class definitions,
 - `arguments` blocks,
 - cell arrays,
-- indexing chains.
+- indexing chains,
+- malformed syntax that produces explicit `ERROR` nodes,
+- malformed syntax that produces `MISSING` recovery nodes,
+- known grammar ambiguities such as compact operator forms including `1./a`.
 
 ### C. GNU Octave runtime tests
 
@@ -579,15 +612,20 @@ Deliver:
 
 - source-file abstraction,
 - byte/line/column mapping,
-- Tree-sitter MATLAB integration,
-- parse-error diagnostics,
-- preservation-zone identification,
-- edit representation and overlap validation.
+- Tree-sitter MATLAB integration with an exact tested grammar version/revision,
+- parse-error diagnostics covering `ERROR` and `MISSING` recovery,
+- preservation-zone identification with rule-specific allowed edit domains,
+- edit representation and deterministic conflict validation,
+- parser-ambiguity regression fixtures/guards.
 
 Acceptance:
 
 - representative MATLAB corpus parses without crashes,
 - parser errors are reported deterministically,
+- both explicit `ERROR` and `MISSING` recovery block structural formatting,
+- same-offset/boundary edit conflicts cannot be resolved by incidental iteration order,
+- known grammar-ambiguity fixtures are guarded from unsafe structural edits,
+- parser-version changes require the parser/golden corpus to pass,
 - malformed input cannot trigger unsafe structural formatting.
 
 ### Phase 2 — minimal formatter
@@ -685,8 +723,10 @@ v0.1 is complete when:
 - F001–F008 and L001–L002 are implemented,
 - `check`, `fmt`, `fmt --check`, and `lint` work on files/directories,
 - JSON diagnostics are stable,
-- malformed syntax is handled conservatively,
-- formatter edits are transactional,
+- malformed syntax, including `ERROR` and `MISSING` recovery, is handled conservatively,
+- formatter edits are transactional and conflict-free,
+- the Tree-sitter MATLAB grammar is pinned to an exact tested version/revision,
+- known parser-ambiguity fixtures are protected from unsafe structural edits,
 - golden tests and idempotence tests pass,
 - representative Octave-compatible fixtures execute successfully before/after formatting,
 - GitHub Actions passes on `ubuntu-latest`,
