@@ -211,7 +211,7 @@ fn run_lint(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) -
     emit_diagnostics(&mut diagnostics, output_format)
 }
 
-fn emit_diagnostics(diagnostics: &mut Vec<Diagnostic>, output_format: OutputFormat) -> ExitCode {
+fn emit_diagnostics(diagnostics: &mut [Diagnostic], output_format: OutputFormat) -> ExitCode {
     sort_diagnostics(diagnostics);
 
     match output_format {
