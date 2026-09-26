@@ -267,7 +267,7 @@ mod tests {
         fs::write(root.join("vendor/b.m"), "x = 2;\n").expect("vendor");
 
         let targets =
-            discover_paths(&[root.clone()], &["**/vendor/**".to_owned()]).expect("discover");
+            discover_paths(std::slice::from_ref(&root), &["**/vendor/**".to_owned()]).expect("discover");
 
         assert_eq!(targets.len(), 1);
         assert!(targets[0].io_path.ends_with("src/a.m"));
