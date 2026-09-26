@@ -118,7 +118,7 @@ fn multiple_statement_diagnostics(
 }
 
 fn collect_multiple_statements(node: Node<'_>, diagnostics: &mut BTreeMap<usize, ByteRange>) {
-    if node.kind() == "block" {
+    if matches!(node.kind(), "source_file" | "block") {
         let mut first_by_row = BTreeMap::<usize, usize>::new();
         let mut cursor = node.walk();
 
