@@ -115,8 +115,10 @@ mod tests {
 
     #[test]
     fn formatter_edit_uses_stable_json_shape() {
-        let source = SourceFile::new("foo.m", "x=1;
-");
+        let source = SourceFile::new(
+            "foo.m", "x=1;
+",
+        );
         let edit = Edit {
             range: ByteRange::new(1, 1),
             replacement: " ".to_owned(),
