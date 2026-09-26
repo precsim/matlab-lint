@@ -187,12 +187,12 @@ impl ExcludeMatcher {
     fn new(patterns: &[String]) -> Result<Self, DiscoveryError> {
         let mut builder = GitignoreBuilder::new(".");
         for pattern in patterns {
-            if let Some(error) = builder.add_line(None, pattern) {
-                return Err(DiscoveryError::ExcludePattern {
+            builder
+                .add_line(None, pattern)
+                .map_err(|error| DiscoveryError::ExcludePattern {
                     pattern: pattern.clone(),
                     message: error.to_string(),
-                });
-            }
+                })?;
         }
         let matcher = builder
             .build()
