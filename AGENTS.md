@@ -74,12 +74,14 @@ OCTAVE_BIN="$(command -v octave-cli || command -v octave)"
 
 If the named test entry point does not yet exist because the repository is still in an earlier implementation phase, add the smallest appropriate smoke test as part of that phase rather than inventing an unrelated test framework.
 
-After `mstyle` can operate on repository fixtures, also run:
+After `mstyle` can operate on an end-to-end self-check corpus, also run:
 
 ```bash
-cargo run --release -- fmt --check tests/fixtures
-cargo run --release -- lint tests/fixtures
+cargo run --release -- fmt --check tests/selfcheck
+cargo run --release -- lint tests/selfcheck
 ```
+
+Do not run `fmt --check` over golden `input.m` fixtures. Those files are intentionally unformatted inputs whose expected formatted results are verified by the golden-test harness.
 
 Do not claim a change is validated if any applicable command above was skipped or failed. State explicitly when a command cannot yet apply because its implementation phase has not landed.
 
@@ -238,14 +240,24 @@ Only explicitly safe lexical cleanup may run on malformed source, initially:
 
 Return a clear diagnostic instead of guessing indentation or expression structure.
 
+Treat a parse error in user source as a source diagnostic (exit code `1` for `check`, `lint`, or `fmt --check`), not as an internal tool failure. Reserve exit code `2` for configuration, I/O, Git integration, or internal failures.
+
 ## Diagnostics and agent compatibility
 
 Diagnostics must have stable rule IDs.
+
+CLI command roles are stable:
+
+- `fmt --check` reports formatter violations without writing,
+- `lint` reports lint diagnostics without writing,
+- `check` aggregates both in one deterministic, non-mutating pass.
 
 When adding/changing JSON output:
 
 - keep field names stable,
 - include file and source span,
+- use 1-based line/column positions where columns count Unicode scalar values,
+- include 0-based half-open UTF-8 `start_byte` / `end_byte` offsets,
 - include rule ID,
 - include severity,
 - include whether the issue is fixable,
