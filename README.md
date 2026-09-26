@@ -29,6 +29,14 @@ Check formatting without writing:
 mstyle fmt --check src/
 ```
 
+Format source from stdin and write the result to stdout:
+
+```bash
+printf 'x=1 ;' | mstyle fmt --stdin
+```
+
+`--stdin` is stream-only and cannot be combined with paths, `--check`, or `--diff`.
+
 Run lint diagnostics:
 
 ```bash

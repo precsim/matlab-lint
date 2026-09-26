@@ -40,6 +40,10 @@ pub enum Command {
         #[arg(long)]
         check: bool,
 
+        /// Read source from stdin and write formatted source to stdout.
+        #[arg(long, conflicts_with_all = ["check", "diff", "paths"])]
+        stdin: bool,
+
         /// Format-check only MATLAB files changed relative to the merge-base with BASE.
         #[arg(
             long,
@@ -111,8 +115,14 @@ mod tests {
             .expect("CLI should parse");
 
         match cli.command {
-            Command::Fmt { paths, check, diff } => {
+            Command::Fmt {
+                paths,
+                check,
+                diff,
+                stdin,
+            } => {
                 assert!(check);
+                assert!(!stdin);
                 assert!(paths.is_empty());
                 assert_eq!(diff.as_deref(), Some("origin/main"));
             }
@@ -126,5 +136,31 @@ mod tests {
             Cli::try_parse_from(["mstyle", "fmt", "--diff", "origin/main"]).is_err(),
             "--diff must require --check"
         );
+    }
+
+    #[test]
+    fn parses_fmt_stdin_command() {
+        let cli = Cli::try_parse_from(["mstyle", "fmt", "--stdin"]).expect("CLI should parse");
+
+        match cli.command {
+            Command::Fmt {
+                paths,
+                check,
+                diff,
+                stdin,
+            } => {
+                assert!(stdin);
+                assert!(!check);
+                assert!(diff.is_none());
+                assert!(paths.is_empty());
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_fmt_stdin_with_paths_or_check() {
+        assert!(Cli::try_parse_from(["mstyle", "fmt", "--stdin", "file.m"]).is_err());
+        assert!(Cli::try_parse_from(["mstyle", "fmt", "--stdin", "--check"]).is_err());
     }
 }
