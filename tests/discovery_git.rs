@@ -67,7 +67,6 @@ fn diff_discovery_includes_tracked_renamed_and_untracked_but_not_deleted_or_igno
     fs::remove_dir_all(root).expect("cleanup");
 }
 
-
 #[test]
 fn changed_discovery_includes_staged_unstaged_and_untracked_only() {
     let root = temp_dir("changed");
