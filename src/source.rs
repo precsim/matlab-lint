@@ -1,6 +1,8 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ByteRange {
     pub start: usize,
@@ -29,7 +31,7 @@ impl ByteRange {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct SourcePosition {
     pub line: usize,
     pub column: usize,

@@ -5,7 +5,7 @@ mod punctuation;
 use std::fmt;
 
 use crate::edit::{Edit, EditError, apply_edits, normalize_edits};
-use crate::parser::{MatlabParser, ParseDiagnostic, ParserError};
+use crate::parser::{MatlabParser, ParseDiagnostic, ParseResult, ParserError};
 use crate::preserve::collect_preservation_zones;
 use crate::source::SourceFile;
 
@@ -74,8 +74,15 @@ pub fn format_source(
 ) -> Result<FormatOutcome, FormatterError> {
     let mut parser = MatlabParser::new()?;
     let parsed = parser.parse(source)?;
-    let parse_diagnostics = parsed.diagnostics().to_vec();
+    format_source_with_parse(source, options, &parsed)
+}
 
+pub fn format_source_with_parse(
+    source: &SourceFile,
+    options: FormatterOptions,
+    parsed: &ParseResult,
+) -> Result<FormatOutcome, FormatterError> {
+    let parse_diagnostics = parsed.diagnostics().to_vec();
     let mut edits = lexical::collect_edits(source.text(), options.line_ending);
 
     if parsed.structural_formatting_allowed() {
@@ -98,6 +105,7 @@ pub fn format_source(
 
     if parsed.structural_formatting_allowed() && output != source.text() {
         let formatted = SourceFile::new(source.path(), output.clone());
+        let mut parser = MatlabParser::new()?;
         let reparsed = parser.parse(&formatted)?;
 
         if reparsed.has_errors() {
