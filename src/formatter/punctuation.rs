@@ -33,6 +33,10 @@ fn visit(node: Node<'_>, source: &str, zones: &[PreservationZone], edits: &mut V
             normalize_inline_space_before(node.start_byte(), source, zones, "F010", edits);
             normalize_space_after(node.end_byte(), source, zones, "F010", edits);
         }
+        ":" if range_colon(node) && token_allowed(node, zones) => {
+            remove_inline_space_before(node.start_byte(), source, zones, "F011", edits);
+            remove_inline_space_after(node.end_byte(), source, zones, "F011", edits);
+        }
         _ => {}
     }
 
@@ -148,6 +152,56 @@ fn normalize_space_after(
     }
 }
 
+fn remove_inline_space_before(
+    position: usize,
+    source: &str,
+    zones: &[PreservationZone],
+    rule_id: &str,
+    edits: &mut Vec<Edit>,
+) {
+    if position == 0 {
+        return;
+    }
+
+    let bytes = source.as_bytes();
+    let start = horizontal_start(bytes, position);
+    if start == position || start == 0 || matches!(bytes[start - 1], b'\n' | b'\r') {
+        return;
+    }
+
+    let range = ByteRange::new(start, position);
+    if edit_allowed(RuleCategory::Structural, range, zones) {
+        edits.push(Edit::new(range.start, range.end, "", rule_id));
+    }
+}
+
+fn remove_inline_space_after(
+    position: usize,
+    source: &str,
+    zones: &[PreservationZone],
+    rule_id: &str,
+    edits: &mut Vec<Edit>,
+) {
+    let bytes = source.as_bytes();
+    if position >= bytes.len() {
+        return;
+    }
+
+    let end = horizontal_end(bytes, position);
+    if end == position
+        || end >= bytes.len()
+        || matches!(bytes[end], b'\n' | b'\r')
+        || source[end..].starts_with("...")
+    {
+        return;
+    }
+
+    let range = ByteRange::new(position, end);
+    if edit_allowed(RuleCategory::Structural, range, zones) {
+        edits.push(Edit::new(range.start, range.end, "", rule_id));
+    }
+}
+
 fn remove_space_before(
     position: usize,
     source: &str,
@@ -208,6 +262,10 @@ fn comparison_or_boolean_operator(node: Node<'_>) -> bool {
 fn binary_operator(node: Node<'_>) -> bool {
     node.parent()
         .is_some_and(|parent| parent.kind() == "binary_operator")
+}
+
+fn range_colon(node: Node<'_>) -> bool {
+    node.parent().is_some_and(|parent| parent.kind() == "range")
 }
 
 #[cfg(test)]
@@ -280,5 +338,42 @@ mod tests {
 
         assert_eq!(outcome.output(), "function y = f(a)\n  y = 1./a;\nend\n");
         assert!(!outcome.edits().iter().any(|edit| edit.rule_id == "F010"));
+    }
+
+    #[test]
+    fn removes_spaces_around_range_colons() {
+        let source = SourceFile::new(
+            "range.m",
+            "function y=f(A)\ny=A(1 : 2 : end);\nfor k = 1 : 3\ny(k)=k;\nend\nend\n",
+        );
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f(A)\n  y = A(1:2:end);\n  for k = 1:3\n    y(k) = k;\n  end\nend\n"
+        );
+        assert!(outcome.edits().iter().any(|edit| edit.rule_id == "F011"));
+    }
+
+    #[test]
+    fn range_spacing_preserves_matrices_and_standalone_index_colons() {
+        let source = SourceFile::new("range.m", "function y=f(A)\nB=[1 : 5];\ny=A(:, :);\nend\n");
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f(A)\n  B = [1 : 5];\n  y = A(:, :);\nend\n"
+        );
+    }
+
+    #[test]
+    fn range_spacing_does_not_join_a_line_continuation() {
+        let source = SourceFile::new("range.m", "function y=f()\ny=1 : ...\n    5;\nend\n");
+        let outcome = format_source(&source, FormatterOptions::default()).expect("format");
+
+        assert_eq!(
+            outcome.output(),
+            "function y = f()\n  y = 1: ...\n    5;\nend\n"
+        );
     }
 }
