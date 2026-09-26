@@ -1,6 +1,6 @@
 use tree_sitter::Node;
 
-use crate::ambiguity::{find_ambiguity_zones, AmbiguityKind};
+use crate::ambiguity::{AmbiguityKind, find_ambiguity_zones};
 use crate::source::ByteRange;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -45,11 +45,7 @@ pub fn collect_preservation_zones(root: Node<'_>, source: &str) -> Vec<Preservat
     zones
 }
 
-pub fn edit_allowed(
-    category: RuleCategory,
-    range: ByteRange,
-    zones: &[PreservationZone],
-) -> bool {
+pub fn edit_allowed(category: RuleCategory, range: ByteRange, zones: &[PreservationZone]) -> bool {
     match category {
         RuleCategory::LexicalCleanup => true,
         RuleCategory::Structural => !zones

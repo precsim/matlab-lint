@@ -128,13 +128,23 @@ impl fmt::Display for PositionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::OutOfBounds { byte, source_len } => {
-                write!(formatter, "byte offset {byte} exceeds source length {source_len}")
+                write!(
+                    formatter,
+                    "byte offset {byte} exceeds source length {source_len}"
+                )
             }
             Self::NotCharBoundary { byte } => {
-                write!(formatter, "byte offset {byte} is not a UTF-8 character boundary")
+                write!(
+                    formatter,
+                    "byte offset {byte} is not a UTF-8 character boundary"
+                )
             }
             Self::InvalidRange(range) => {
-                write!(formatter, "invalid byte range {}..{}", range.start, range.end)
+                write!(
+                    formatter,
+                    "invalid byte range {}..{}",
+                    range.start, range.end
+                )
             }
         }
     }
@@ -175,7 +185,9 @@ mod tests {
     #[test]
     fn rejects_positions_inside_utf8_scalars() {
         let source = SourceFile::new("unicode.m", "é");
-        let error = source.position(1).expect_err("middle of UTF-8 scalar must fail");
+        let error = source
+            .position(1)
+            .expect_err("middle of UTF-8 scalar must fail");
 
         assert_eq!(error, PositionError::NotCharBoundary { byte: 1 });
     }
@@ -183,10 +195,7 @@ mod tests {
     #[test]
     fn slices_only_valid_utf8_ranges() {
         let source = SourceFile::new("example.m", "alpha");
-        assert_eq!(
-            source.slice(ByteRange::new(1, 4)).expect("slice"),
-            "lph"
-        );
+        assert_eq!(source.slice(ByteRange::new(1, 4)).expect("slice"), "lph");
         assert!(source.slice(ByteRange::new(4, 2)).is_err());
     }
 }

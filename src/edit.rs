@@ -118,17 +118,9 @@ fn edits_conflict(left: &Edit, right: &Edit) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditError {
-    InvalidRange {
-        edit: Box<Edit>,
-        source_len: usize,
-    },
-    InvalidUtf8Boundary {
-        edit: Box<Edit>,
-    },
-    Conflict {
-        first: Box<Edit>,
-        second: Box<Edit>,
-    },
+    InvalidRange { edit: Box<Edit>, source_len: usize },
+    InvalidUtf8Boundary { edit: Box<Edit> },
+    Conflict { first: Box<Edit>, second: Box<Edit> },
 }
 
 impl fmt::Display for EditError {
@@ -169,10 +161,7 @@ mod tests {
         let source = "abcdef";
         let output = apply_edits(
             source,
-            vec![
-                Edit::new(4, 6, "EF", "F002"),
-                Edit::new(0, 2, "AB", "F001"),
-            ],
+            vec![Edit::new(4, 6, "EF", "F002"), Edit::new(0, 2, "AB", "F001")],
         )
         .expect("disjoint edits should apply");
 
@@ -205,10 +194,7 @@ mod tests {
     fn rejects_overlapping_replacements() {
         let error = normalize_edits(
             6,
-            vec![
-                Edit::new(0, 4, "x", "F001"),
-                Edit::new(3, 5, "y", "F002"),
-            ],
+            vec![Edit::new(0, 4, "x", "F001"), Edit::new(3, 5, "y", "F002")],
         )
         .expect_err("overlap must fail");
 
@@ -219,10 +205,7 @@ mod tests {
     fn rejects_distinct_insertions_at_same_boundary() {
         let error = normalize_edits(
             6,
-            vec![
-                Edit::new(3, 3, "x", "F001"),
-                Edit::new(3, 3, "y", "F002"),
-            ],
+            vec![Edit::new(3, 3, "x", "F001"), Edit::new(3, 3, "y", "F002")],
         )
         .expect_err("same-position insertions are order-dependent");
 
@@ -233,10 +216,7 @@ mod tests {
     fn rejects_insertion_on_replacement_boundary() {
         let error = normalize_edits(
             6,
-            vec![
-                Edit::new(0, 3, "ABC", "F001"),
-                Edit::new(3, 3, "x", "F002"),
-            ],
+            vec![Edit::new(0, 3, "ABC", "F001"), Edit::new(3, 3, "x", "F002")],
         )
         .expect_err("boundary insertion must fail");
 
@@ -247,10 +227,7 @@ mod tests {
     fn deduplicates_identical_effects() {
         let edits = normalize_edits(
             6,
-            vec![
-                Edit::new(2, 2, "x", "F002"),
-                Edit::new(2, 2, "x", "F001"),
-            ],
+            vec![Edit::new(2, 2, "x", "F002"), Edit::new(2, 2, "x", "F001")],
         )
         .expect("identical effects may be coalesced");
 

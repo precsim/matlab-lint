@@ -66,18 +66,12 @@ impl MatlabParser {
         let mut diagnostics = Vec::new();
         collect_parse_diagnostics(tree.root_node(), source, &mut diagnostics)?;
         diagnostics.sort_by(|left, right| {
-            (
-                left.range.start,
-                left.range.end,
-                &left.kind,
-                &left.message,
-            )
-                .cmp(&(
-                    right.range.start,
-                    right.range.end,
-                    &right.kind,
-                    &right.message,
-                ))
+            (left.range.start, left.range.end, &left.kind, &left.message).cmp(&(
+                right.range.start,
+                right.range.end,
+                &right.kind,
+                &right.message,
+            ))
         });
 
         Ok(ParseResult { tree, diagnostics })
@@ -172,10 +166,7 @@ mod tests {
 
     #[test]
     fn valid_source_allows_structural_formatting() {
-        let result = parse_fixture(
-            "valid.m",
-            "function y = twice(x)\n  y = 2 * x;\nend\n",
-        );
+        let result = parse_fixture("valid.m", "function y = twice(x)\n  y = 2 * x;\nend\n");
 
         assert!(!result.has_errors());
         assert!(result.diagnostics().is_empty());
