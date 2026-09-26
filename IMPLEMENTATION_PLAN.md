@@ -97,6 +97,7 @@ Initial commands:
 ```bash
 mstyle check .
 mstyle check file.m
+mstyle check --format json .
 mstyle fmt .
 mstyle fmt file.m
 mstyle fmt --check .
@@ -118,11 +119,21 @@ mstyle check --changed
 mstyle fmt --stdin
 ```
 
+Command semantics:
+
+- `fmt` applies formatter fixes and writes files transactionally.
+- `fmt --check` is non-mutating and reports formatter violations only.
+- `lint` is non-mutating and reports lint diagnostics only.
+- `check` is the non-mutating aggregate used by CI and agents: it runs the equivalent of `fmt --check` plus `lint` over the same file set and emits one deterministically ordered diagnostic stream.
+- `check --format json` and `lint --format json` use the same diagnostic schema.
+
 Expected exit codes:
 
-- `0`: success, no violations,
-- `1`: style/lint violations,
-- `2`: parse/config/internal error.
+- `0`: success, with no enabled rule violations,
+- `1`: source diagnostics, including style/lint violations and parse errors in input files,
+- `2`: configuration, I/O, Git integration, or internal tool failure.
+
+A parse error is a property of the source being checked, not an internal failure. Mutating `fmt` may still apply explicitly safe lexical cleanup to malformed source, but it must report the parse diagnostic and return `1`.
 
 ## 5. Configuration
 
@@ -134,15 +145,13 @@ Example:
 [format]
 indent_width = 2
 line_endings = "lf"
-max_blank_lines = 2
 
 [lint]
 line_length = 120
 
 [rules]
-L003 = "off"
-L007 = "warning"
-L008 = "warning"
+L001 = "warning"
+L002 = "error"
 
 [exclude]
 paths = [
@@ -324,6 +333,8 @@ JSON mode must be stable and agent-friendly:
       "file": "foo.m",
       "start": {"line": 32, "column": 6},
       "end": {"line": 32, "column": 7},
+      "start_byte": 418,
+      "end_byte": 419,
       "message": "Expected whitespace around '='",
       "fixable": true
     }
@@ -331,7 +342,14 @@ JSON mode must be stable and agent-friendly:
 }
 ```
 
-Keep byte offsets internally; expose line/column positions to users and agents.
+Position conventions are part of the stable JSON API:
+
+- `line` and `column` are **1-based**,
+- columns count Unicode scalar values, not UTF-8 bytes,
+- `start_byte` and `end_byte` are **0-based UTF-8 byte offsets**,
+- byte ranges are half-open: `[start_byte, end_byte)`.
+
+Keep byte offsets internally and expose both byte offsets and human-readable line/column positions to users and agents. If an LSP adapter is added later, it must convert explicitly to the LSP UTF-16 position convention rather than changing this JSON contract.
 
 ## 11. Suggested Rust layout
 
@@ -358,6 +376,7 @@ matlab-lint/
 │       └── statements.rs
 ├── tests/
 │   ├── fixtures/
+│   ├── selfcheck/
 │   └── octave/
 ├── mstyle.toml
 └── AGENTS.md
@@ -396,12 +415,16 @@ These should be the fastest and most numerous tests.
 
 ### B. formatter golden tests
 
-For each fixture:
+For each golden fixture:
 
 ```text
 input.m
 expected.m
 ```
+
+Golden `input.m` files are intentionally allowed to violate formatter rules. They must not be included in repository-wide `fmt --check` self-checks.
+
+Keep a separate `tests/selfcheck/` corpus containing only already-formatted MATLAB files when an end-to-end CLI self-check is useful.
 
 Assert:
 
@@ -482,12 +505,14 @@ Run Octave tests non-interactively:
 "$OCTAVE_BIN" --no-gui --quiet --eval "addpath('tests/octave'); run_tests"
 ```
 
-Once `mstyle` is self-hosting enough for repository fixtures:
+Once `mstyle` is self-hosting enough for an end-to-end corpus, run it only on the already-formatted self-check corpus:
 
 ```bash
-cargo run --release -- fmt --check tests/fixtures
-cargo run --release -- lint tests/fixtures
+cargo run --release -- fmt --check tests/selfcheck
+cargo run --release -- lint tests/selfcheck
 ```
+
+Do not run `fmt --check` across golden `input.m` fixtures; those files are deliberately unformatted test inputs.
 
 Do not require MATLAB on the default CI path.
 
@@ -497,10 +522,14 @@ After basic file mode is stable, add Git-aware filtering.
 
 Requirements:
 
-- respect `.gitignore`,
 - process only `.m` files,
 - allow an explicit base ref,
-- handle renamed/deleted files correctly,
+- resolve the comparison point as `merge-base(<base>, HEAD)`,
+- include tracked files changed between that merge base and the current working tree, including staged and unstaged changes,
+- include untracked `.m` files unless excluded by normal ignore/config rules,
+- do not drop a tracked changed file merely because it now matches `.gitignore`,
+- apply `.gitignore` to recursive discovery and untracked-file discovery,
+- handle renamed and deleted paths correctly; deleted files are not parsed, while the surviving renamed path is checked,
 - avoid shell-dependent Git parsing where possible.
 
 Example:
@@ -509,7 +538,7 @@ Example:
 mstyle check --diff origin/main
 ```
 
-This is the recommended initial adoption path for large legacy repositories because it avoids a repository-wide formatting commit.
+In effect, `--diff <base>` means "check the MATLAB files changed relative to the branch point with `<base>`, plus current local changes." This is the recommended initial adoption path for large legacy repositories because it avoids a repository-wide formatting commit.
 
 ## 15. Performance targets
 
