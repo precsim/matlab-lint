@@ -1,7 +1,7 @@
 mod cli;
 
 use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -44,7 +44,18 @@ fn run_command(command: Command, config: &Config) -> ExitCode {
             format,
             diff,
         } => run_check(paths, diff.as_deref(), format, config),
-        Command::Fmt { paths, check, diff } => run_fmt(paths, check, diff.as_deref(), config),
+        Command::Fmt {
+            paths,
+            check,
+            diff,
+            stdin,
+        } => {
+            if stdin {
+                run_fmt_stdin(config)
+            } else {
+                run_fmt(paths, check, diff.as_deref(), config)
+            }
+        },
         Command::Lint { paths, format } => run_lint(paths, format, config),
     }
 }
@@ -248,6 +259,46 @@ fn emit_diagnostics(diagnostics: &mut [Diagnostic], output_format: OutputFormat)
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
+    }
+}
+
+fn run_fmt_stdin(config: &Config) -> ExitCode {
+    let mut input = String::new();
+    if let Err(error) = io::stdin().read_to_string(&mut input) {
+        eprintln!("mstyle: failed to read stdin: {error}");
+        return ExitCode::from(2);
+    }
+
+    let source = SourceFile::new("<stdin>", input);
+    let outcome = match format_source(&source, formatter_options(config)) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            eprintln!("mstyle: <stdin>: {error}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let has_parse_diagnostics = !outcome.parse_diagnostics().is_empty();
+    for diagnostic in outcome.parse_diagnostics() {
+        eprintln!(
+            "<stdin>:{}:{} PARSE {}",
+            diagnostic.start.line, diagnostic.start.column, diagnostic.message
+        );
+    }
+
+    let mut stdout = io::stdout().lock();
+    if let Err(error) = stdout
+        .write_all(outcome.output().as_bytes())
+        .and_then(|_| stdout.flush())
+    {
+        eprintln!("mstyle: failed to write stdout: {error}");
+        return ExitCode::from(2);
+    }
+
+    if has_parse_diagnostics {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
