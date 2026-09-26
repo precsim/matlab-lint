@@ -6,7 +6,7 @@ Fast, conservative MATLAB/Octave formatter and linter written in Rust.
 
 ## Install
 
-Download a native binary from a tagged GitHub Release, or build from source with stable Rust:
+Download a native binary from a tagged GitHub Release, or build from source with stable Rust. Tagged releases provide Linux x86_64, Windows x86_64, macOS x86_64, and macOS arm64 executables. The released executable is standalone for normal `check`, `fmt`, and `lint` use; Rust, MATLAB, and Octave are not required at runtime.
 
 ```bash
 cargo build --locked --release
