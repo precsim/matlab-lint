@@ -7,24 +7,13 @@ use serde::Deserialize;
 
 use crate::diagnostic::Severity;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub format: FormatConfig,
     pub lint: LintConfig,
     pub rules: RulesConfig,
     pub exclude: ExcludeConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            format: FormatConfig::default(),
-            lint: LintConfig::default(),
-            rules: RulesConfig::default(),
-            exclude: ExcludeConfig::default(),
-        }
-    }
 }
 
 impl Config {
