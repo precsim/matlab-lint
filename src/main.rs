@@ -55,7 +55,7 @@ fn run_command(command: Command, config: &Config) -> ExitCode {
             } else {
                 run_fmt(paths, check, diff.as_deref(), config)
             }
-        },
+        }
         Command::Lint { paths, format } => run_lint(paths, format, config),
     }
 }
