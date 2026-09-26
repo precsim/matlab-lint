@@ -22,8 +22,6 @@ pub fn discover_paths(
     } else {
         inputs.to_vec()
     };
-    let matcher = ExcludeMatcher::new(exclude_patterns)?;
-    let cwd = env::current_dir().map_err(DiscoveryError::Io)?;
     let mut targets = BTreeMap::<PathBuf, FileTarget>::new();
 
     for root in roots {
@@ -31,7 +29,11 @@ pub fn discover_paths(
             if !is_matlab_file(&root) {
                 return Err(DiscoveryError::NotMatlabFile(root));
             }
-            if !matcher.excluded(match_path(&root, &cwd), false) {
+            let matcher = ExcludeMatcher::new(
+                root.parent().unwrap_or_else(|| Path::new(".")),
+                exclude_patterns,
+            )?;
+            if !matcher.excluded(&root, false) {
                 insert_target(&mut targets, root.clone(), root);
             }
             continue;
@@ -41,6 +43,7 @@ pub fn discover_paths(
             return Err(DiscoveryError::MissingPath(root));
         }
 
+        let matcher = ExcludeMatcher::new(&root, exclude_patterns)?;
         let walker = WalkBuilder::new(&root)
             .standard_filters(true)
             .follow_links(false)
@@ -56,7 +59,7 @@ pub fn discover_paths(
             }
 
             let path = entry.into_path();
-            if matcher.excluded(match_path(&path, &cwd), false) {
+            if matcher.excluded(&path, false) {
                 continue;
             }
             insert_target(&mut targets, path.clone(), path);
@@ -111,15 +114,18 @@ pub fn discover_diff_from(
         ["ls-files", "--others", "--exclude-standard", "-z"],
     )?;
 
-    let matcher = ExcludeMatcher::new(exclude_patterns)?;
+    let matcher = ExcludeMatcher::new(&repo_root, exclude_patterns)?;
     let mut targets = BTreeMap::<PathBuf, FileTarget>::new();
 
     for relative in nul_paths(&tracked)?.chain(nul_paths(&untracked)?) {
-        if !is_matlab_file(&relative) || matcher.excluded(&relative, false) {
+        if !is_matlab_file(&relative) {
             continue;
         }
 
         let io_path = repo_root.join(&relative);
+        if matcher.excluded(&io_path, false) {
+            continue;
+        }
         if io_path.is_file() {
             insert_target(&mut targets, relative.clone(), io_path);
         }
@@ -143,9 +149,6 @@ fn is_matlab_file(path: &Path) -> bool {
     path.extension().and_then(|extension| extension.to_str()) == Some("m")
 }
 
-fn match_path<'a>(path: &'a Path, cwd: &'a Path) -> &'a Path {
-    path.strip_prefix(cwd).unwrap_or(path)
-}
 
 fn nul_paths(bytes: &[u8]) -> Result<impl Iterator<Item = PathBuf> + '_, DiscoveryError> {
     let fields = bytes
@@ -184,8 +187,8 @@ struct ExcludeMatcher {
 }
 
 impl ExcludeMatcher {
-    fn new(patterns: &[String]) -> Result<Self, DiscoveryError> {
-        let mut builder = GitignoreBuilder::new(".");
+    fn new(root: &Path, patterns: &[String]) -> Result<Self, DiscoveryError> {
+        let mut builder = GitignoreBuilder::new(root);
         for pattern in patterns {
             builder
                 .add_line(None, pattern)
