@@ -7,10 +7,8 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_dir(name: &str) -> PathBuf {
     let sequence = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!(
-        "mstyle-{name}-{}-{sequence}",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("mstyle-{name}-{}-{sequence}", std::process::id()));
     fs::create_dir_all(&path).expect("create temp directory");
     path
 }

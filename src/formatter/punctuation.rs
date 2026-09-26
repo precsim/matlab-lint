@@ -4,22 +4,13 @@ use crate::edit::Edit;
 use crate::preserve::{PreservationZone, RuleCategory, edit_allowed};
 use crate::source::ByteRange;
 
-pub(crate) fn collect_edits(
-    root: Node<'_>,
-    source: &str,
-    zones: &[PreservationZone],
-) -> Vec<Edit> {
+pub(crate) fn collect_edits(root: Node<'_>, source: &str, zones: &[PreservationZone]) -> Vec<Edit> {
     let mut edits = Vec::new();
     visit(root, source, zones, &mut edits);
     edits
 }
 
-fn visit(
-    node: Node<'_>,
-    source: &str,
-    zones: &[PreservationZone],
-    edits: &mut Vec<Edit>,
-) {
+fn visit(node: Node<'_>, source: &str, zones: &[PreservationZone], edits: &mut Vec<Edit>) {
     match node.kind() {
         "," if token_allowed(node, zones) => format_comma(node, source, zones, edits),
         "=" if assignment_equals(node) && token_allowed(node, zones) => {
@@ -38,12 +29,7 @@ fn visit(
     }
 }
 
-fn format_comma(
-    node: Node<'_>,
-    source: &str,
-    zones: &[PreservationZone],
-    edits: &mut Vec<Edit>,
-) {
+fn format_comma(node: Node<'_>, source: &str, zones: &[PreservationZone], edits: &mut Vec<Edit>) {
     remove_space_before(node.start_byte(), source, zones, "F006", edits);
 
     let bytes = source.as_bytes();

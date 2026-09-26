@@ -10,17 +10,15 @@ pub(crate) fn collect_edits(source: &str, line_ending: LineEnding) -> Vec<Edit> 
     let mut index = 0;
 
     while index < bytes.len() {
-        let (newline_start, newline_end) = if bytes[index] == b'\r'
-            && index + 1 < bytes.len()
-            && bytes[index + 1] == b'\n'
-        {
-            (index, index + 2)
-        } else if bytes[index] == b'\n' {
-            (index, index + 1)
-        } else {
-            index += 1;
-            continue;
-        };
+        let (newline_start, newline_end) =
+            if bytes[index] == b'\r' && index + 1 < bytes.len() && bytes[index + 1] == b'\n' {
+                (index, index + 2)
+            } else if bytes[index] == b'\n' {
+                (index, index + 1)
+            } else {
+                index += 1;
+                continue;
+            };
 
         let trailing_start = trim_horizontal_end(bytes, line_start, newline_start);
         if trailing_start < newline_start {
@@ -38,12 +36,7 @@ pub(crate) fn collect_edits(source: &str, line_ending: LineEnding) -> Vec<Edit> 
 
     if !source.is_empty() && line_start < bytes.len() {
         let trailing_start = trim_horizontal_end(bytes, line_start, bytes.len());
-        edits.push(Edit::new(
-            trailing_start,
-            bytes.len(),
-            target,
-            "F002",
-        ));
+        edits.push(Edit::new(trailing_start, bytes.len(), target, "F002"));
     }
 
     edits

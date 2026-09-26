@@ -93,9 +93,7 @@ fn process_statement(node: Node<'_>, level: usize, targets: &mut [Option<usize>]
             process_section(node, level, targets)
         }
         "arguments_statement" => process_arguments(node, level, targets),
-        "elseif_clause" | "else_clause" | "catch_clause" => {
-            process_clause(node, level, targets)
-        }
+        "elseif_clause" | "else_clause" | "catch_clause" => process_clause(node, level, targets),
         "case_clause" | "otherwise_clause" => process_clause(node, level, targets),
         _ => mark_start(node, level, targets),
     }
@@ -282,9 +280,7 @@ fn line_infos(source: &str) -> Vec<LineInfo> {
         }
 
         let mut first_non_indent = start;
-        while first_non_indent < content_end
-            && matches!(bytes[first_non_indent], b' ' | b'\t')
-        {
+        while first_non_indent < content_end && matches!(bytes[first_non_indent], b' ' | b'\t') {
             first_non_indent += 1;
         }
 
@@ -312,10 +308,7 @@ mod tests {
 
     #[test]
     fn indents_switch_cases_and_bodies() {
-        let source = SourceFile::new(
-            "switch.m",
-            "switch x\ncase 1\ny=1;\notherwise\ny=2;\nend\n",
-        );
+        let source = SourceFile::new("switch.m", "switch x\ncase 1\ny=1;\notherwise\ny=2;\nend\n");
         let outcome = format_source(&source, FormatterOptions::default()).expect("format");
 
         assert_eq!(
