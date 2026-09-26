@@ -77,6 +77,13 @@ pub fn discover_diff(
     discover_diff_from(&cwd, base, exclude_patterns)
 }
 
+pub fn discover_changed(
+    exclude_patterns: &[String],
+) -> Result<Vec<FileTarget>, DiscoveryError> {
+    let cwd = env::current_dir().map_err(DiscoveryError::Io)?;
+    discover_changed_from(&cwd, exclude_patterns)
+}
+
 pub fn discover_diff_from(
     cwd: &Path,
     base: &str,
@@ -114,10 +121,48 @@ pub fn discover_diff_from(
         ["ls-files", "--others", "--exclude-standard", "-z"],
     )?;
 
-    let matcher = ExcludeMatcher::new(&repo_root, exclude_patterns)?;
+    collect_git_targets(&repo_root, &tracked, &untracked, exclude_patterns)
+}
+
+pub fn discover_changed_from(
+    cwd: &Path,
+    exclude_patterns: &[String],
+) -> Result<Vec<FileTarget>, DiscoveryError> {
+    let root_output = run_git(cwd, ["rev-parse", "--show-toplevel"])?;
+    let root_text =
+        std::str::from_utf8(&root_output).map_err(|_| DiscoveryError::NonUtf8GitOutput)?;
+    let repo_root = PathBuf::from(root_text.trim());
+
+    let tracked = run_git(
+        &repo_root,
+        [
+            "diff",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACMR",
+            "--find-renames",
+            "HEAD",
+            "--",
+        ],
+    )?;
+    let untracked = run_git(
+        &repo_root,
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+    )?;
+
+    collect_git_targets(&repo_root, &tracked, &untracked, exclude_patterns)
+}
+
+fn collect_git_targets(
+    repo_root: &Path,
+    tracked: &[u8],
+    untracked: &[u8],
+    exclude_patterns: &[String],
+) -> Result<Vec<FileTarget>, DiscoveryError> {
+    let matcher = ExcludeMatcher::new(repo_root, exclude_patterns)?;
     let mut targets = BTreeMap::<PathBuf, FileTarget>::new();
 
-    for relative in nul_paths(&tracked)?.chain(nul_paths(&untracked)?) {
+    for relative in nul_paths(tracked)?.chain(nul_paths(untracked)?) {
         if !is_matlab_file(&relative) {
             continue;
         }
