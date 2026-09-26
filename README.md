@@ -69,6 +69,119 @@ mstyle check src/
 
 If no path is supplied, `check`, `fmt`, and `lint` operate recursively from the current directory.
 
+## CLI help
+
+The CLI has built-in help at every level:
+
+```bash
+mstyle --help
+mstyle check --help
+mstyle fmt --help
+mstyle lint --help
+```
+
+### Top-level usage
+
+```text
+mstyle [OPTIONS] <COMMAND>
+```
+
+Commands:
+
+| Command | Purpose |
+| --- | --- |
+| `check` | Check formatting and lint diagnostics without modifying files |
+| `fmt` | Format MATLAB/Octave source |
+| `lint` | Run lint diagnostics without modifying files |
+
+Global options:
+
+| Option | Meaning |
+| --- | --- |
+| `--config <PATH>` | Read configuration from this file instead of `./mstyle.toml` |
+| `-h, --help` | Print help |
+| `-V, --version` | Print version |
+
+Because `--config` is global, it may be supplied with any subcommand.
+
+### `mstyle check`
+
+```text
+mstyle check [OPTIONS] [PATH]...
+```
+
+Runs formatter checks and lint diagnostics together without modifying files. With no path, discovery starts from the current directory.
+
+| Option / argument | Meaning |
+| --- | --- |
+| `[PATH]...` | Files or directories to check |
+| `--format <text|json>` | Diagnostic output format; default: `text` |
+| `--diff <BASE>` | Check only MATLAB files changed relative to `merge-base(BASE, HEAD)`, plus current local changes |
+| `--changed` | Check staged, unstaged, and non-ignored untracked MATLAB files relative to `HEAD` |
+
+`--diff`, `--changed`, and explicit paths are mutually exclusive selection modes.
+
+Examples:
+
+```bash
+mstyle check .
+mstyle check --format json src/
+mstyle check --changed
+mstyle check --diff origin/main
+```
+
+### `mstyle fmt`
+
+```text
+mstyle fmt [OPTIONS] [PATH]...
+```
+
+Formats files in place by default. With no path, discovery starts from the current directory.
+
+| Option / argument | Meaning |
+| --- | --- |
+| `[PATH]...` | Files or directories to format |
+| `--check` | Report formatting violations without modifying files |
+| `--stdin` | Read source from stdin and write formatted source to stdout |
+| `--diff <BASE>` | Format-check only files changed relative to `merge-base(BASE, HEAD)`; requires `--check` |
+
+Important combinations:
+
+- `--stdin` cannot be combined with paths, `--check`, or `--diff`.
+- `--diff` requires `--check` and cannot be combined with explicit paths.
+- Plain `fmt` writes changes transactionally; `fmt --check` never writes.
+
+Examples:
+
+```bash
+mstyle fmt model.m
+mstyle fmt src/
+mstyle fmt --check .
+mstyle fmt --check --diff origin/main
+printf 'x=1 ;' | mstyle fmt --stdin
+```
+
+### `mstyle lint`
+
+```text
+mstyle lint [OPTIONS] [PATH]...
+```
+
+Runs lint diagnostics only and never modifies files. With no path, discovery starts from the current directory.
+
+| Option / argument | Meaning |
+| --- | --- |
+| `[PATH]...` | Files or directories to lint |
+| `--format <text|json>` | Diagnostic output format; default: `text` |
+
+Examples:
+
+```bash
+mstyle lint .
+mstyle lint src/
+mstyle lint --format json src/
+```
+
 ## Changed-file CI
 
 For local work, check only staged, unstaged, and untracked MATLAB files:
