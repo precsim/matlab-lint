@@ -89,6 +89,7 @@ fn formatter_message(rule_id: &str) -> &'static str {
         "F006" => "incorrect comma spacing",
         "F007" => "incorrect assignment spacing",
         "F008" => "whitespace before semicolon",
+        "F009" => "incorrect comparison/logical operator spacing",
         _ => "formatting violation",
     }
 }
