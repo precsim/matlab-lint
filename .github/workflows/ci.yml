@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install Octave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y octave
+
+      - name: Rust format
+        run: cargo fmt --all -- --check
+
+      - name: Rust clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --all-targets --all-features
+
+      - name: Release build
+        run: cargo build --release
+
+      - name: Octave tests
+        run: |
+          OCTAVE_BIN="$(command -v octave-cli || command -v octave)"
+          test -n "$OCTAVE_BIN"
+          "$OCTAVE_BIN" --version
+          "$OCTAVE_BIN" --no-gui --quiet --eval "addpath('tests/octave'); run_tests"

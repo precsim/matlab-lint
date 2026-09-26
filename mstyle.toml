@@ -1,0 +1,9 @@
+[format]
+indent_width = 2
+line_endings = "lf"
+
+[lint]
+line_length = 120
+
+[exclude]
+paths = []
