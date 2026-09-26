@@ -117,8 +117,7 @@ mod tests {
 
     #[test]
     fn parses_check_changed_command() {
-        let cli = Cli::try_parse_from(["mstyle", "check", "--changed"])
-            .expect("CLI should parse");
+        let cli = Cli::try_parse_from(["mstyle", "check", "--changed"]).expect("CLI should parse");
 
         match cli.command {
             Command::Check {
@@ -138,14 +137,7 @@ mod tests {
     #[test]
     fn rejects_check_changed_with_diff_or_paths() {
         assert!(
-            Cli::try_parse_from([
-                "mstyle",
-                "check",
-                "--changed",
-                "--diff",
-                "origin/main"
-            ])
-            .is_err()
+            Cli::try_parse_from(["mstyle", "check", "--changed", "--diff", "origin/main"]).is_err()
         );
         assert!(Cli::try_parse_from(["mstyle", "check", "--changed", "src"]).is_err());
     }
