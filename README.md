@@ -6,13 +6,31 @@ Fast, conservative MATLAB/Octave formatter and linter written in Rust.
 
 ## Install
 
-Download a native binary from a tagged GitHub Release, or build from source with stable Rust. Tagged releases provide Linux x86_64, Windows x86_64, macOS x86_64, and macOS arm64 executables. The released executable is standalone for normal `check`, `fmt`, and `lint` use; Rust, MATLAB, and Octave are not required at runtime.
+Download a native binary from a tagged GitHub Release, or use the checksum-verifying installer scripts. Tagged releases provide Linux x86_64, Windows x86_64, macOS x86_64, and macOS arm64 executables. The released executable is standalone for normal `check`, `fmt`, and `lint` use; Rust, MATLAB, and Octave are not required at runtime.
+
+Linux/macOS:
+
+```bash
+curl -fsSLo install-mstyle.sh https://raw.githubusercontent.com/precsim/matlab-lint/main/scripts/install.sh
+sh install-mstyle.sh
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/precsim/matlab-lint/main/scripts/install.ps1 -OutFile "$env:TEMP\install-mstyle.ps1"
+& "$env:TEMP\install-mstyle.ps1"
+```
+
+The installers verify the published SHA-256 checksum and do not modify `PATH`. See [docs/installing.md](docs/installing.md) for version pinning and custom install directories.
+
+To build from source instead:
 
 ```bash
 cargo build --locked --release
 ```
 
-The binary is written to `target/release/mstyle` (or `mstyle.exe` on Windows).
+The locally built binary is written to `target/release/mstyle` (or `mstyle.exe` on Windows).
 
 ## Quick start
 
