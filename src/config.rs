@@ -105,6 +105,8 @@ pub struct RulesConfig {
     pub f008: Option<SeveritySetting>,
     #[serde(rename = "F009")]
     pub f009: Option<SeveritySetting>,
+    #[serde(rename = "F010")]
+    pub f010: Option<SeveritySetting>,
     #[serde(rename = "L001")]
     pub l001: Option<SeveritySetting>,
     #[serde(rename = "L002")]
@@ -123,6 +125,7 @@ impl RulesConfig {
             "F007" => self.f007,
             "F008" => self.f008,
             "F009" => self.f009,
+            "F010" => self.f010,
             "L001" => self.l001,
             "L002" => self.l002,
             _ => None,
