@@ -58,8 +58,7 @@ fn normalization_is_sorted_and_idempotent_for_disjoint_edits() {
             .collect();
 
         shuffle(&mut edits, &mut state);
-        let normalized =
-            normalize_edits(source_len, edits).expect("generated edits are disjoint");
+        let normalized = normalize_edits(source_len, edits).expect("generated edits are disjoint");
         assert!(
             normalized
                 .windows(2)
