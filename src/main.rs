@@ -11,9 +11,7 @@ use cli::{Cli, Command, OutputFormat};
 use mstyle::config::{Config, LineEndings};
 use mstyle::diagnostic::{Diagnostic, DiagnosticReport, sort_diagnostics};
 use mstyle::discovery::{FileTarget, discover_diff, discover_paths};
-use mstyle::formatter::{
-    FormatterOptions, LineEnding, format_source, format_source_with_parse,
-};
+use mstyle::formatter::{FormatterOptions, LineEnding, format_source, format_source_with_parse};
 use mstyle::lint::{LintOptions, lint_source};
 use mstyle::parser::MatlabParser;
 use mstyle::source::SourceFile;
@@ -135,7 +133,8 @@ fn run_check(
                 .map(|diagnostic| Diagnostic::from_parse(source.path(), diagnostic)),
         );
 
-        let formatted = match format_source_with_parse(&source, formatter_options(config), &parsed) {
+        let formatted = match format_source_with_parse(&source, formatter_options(config), &parsed)
+        {
             Ok(outcome) => outcome,
             Err(error) => {
                 eprintln!("mstyle: {}: {error}", source.path().display());
