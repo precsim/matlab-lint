@@ -28,6 +28,16 @@ jobs:
       - name: Release build
         run: cargo build --locked --release
 
+      - name: Standalone binary smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=target/release/mstyle
+          "$binary" --version
+          printf 'x = 1;\n' > binary-smoke.m
+          "$binary" lint binary-smoke.m
+          "$binary" check binary-smoke.m
+
       - name: Benchmark smoke
         run: MSTYLE_BENCH_ITERS=10 cargo run --locked --release --example benchmark
 
@@ -59,6 +69,7 @@ jobs:
         os:
           - windows-latest
           - macos-latest
+          - macos-15-intel
 
     steps:
       - uses: actions/checkout@v4
@@ -67,3 +78,17 @@ jobs:
 
       - name: Release build
         run: cargo build --locked --release
+
+      - name: Standalone binary smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=target/release/mstyle
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            binary=target/release/mstyle.exe
+          fi
+
+          "$binary" --version
+          printf 'x = 1;\n' > binary-smoke.m
+          "$binary" lint binary-smoke.m
+          "$binary" check binary-smoke.m
