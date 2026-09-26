@@ -357,10 +357,7 @@ mod tests {
 
     #[test]
     fn range_spacing_preserves_matrices_and_standalone_index_colons() {
-        let source = SourceFile::new(
-            "range.m",
-            "function y=f(A)\nB=[1 : 5];\ny=A(:, :);\nend\n",
-        );
+        let source = SourceFile::new("range.m", "function y=f(A)\nB=[1 : 5];\ny=A(:, :);\nend\n");
         let outcome = format_source(&source, FormatterOptions::default()).expect("format");
 
         assert_eq!(
@@ -371,10 +368,7 @@ mod tests {
 
     #[test]
     fn range_spacing_does_not_join_a_line_continuation() {
-        let source = SourceFile::new(
-            "range.m",
-            "function y=f()\ny=1 : ...\n    5;\nend\n",
-        );
+        let source = SourceFile::new("range.m", "function y=f()\ny=1 : ...\n    5;\nend\n");
         let outcome = format_source(&source, FormatterOptions::default()).expect("format");
 
         assert_eq!(
