@@ -302,7 +302,6 @@ fn row_for_byte(lines: &[LineInfo], byte: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::formatter::{FormatterOptions, format_source};
     use crate::source::SourceFile;
 
