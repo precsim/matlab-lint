@@ -149,7 +149,6 @@ fn is_matlab_file(path: &Path) -> bool {
     path.extension().and_then(|extension| extension.to_str()) == Some("m")
 }
 
-
 fn nul_paths(bytes: &[u8]) -> Result<impl Iterator<Item = PathBuf> + '_, DiscoveryError> {
     let fields = bytes
         .split(|byte| *byte == 0)
