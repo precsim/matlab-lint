@@ -84,7 +84,10 @@ fn collect_node_zones(node: Node<'_>, zones: &mut Vec<PreservationZone>) {
 
 fn preservation_intersects(edit: ByteRange, zone: ByteRange) -> bool {
     if edit.is_empty() {
-        return zone.touches_point(edit.start);
+        if zone.is_empty() {
+            return edit.start == zone.start;
+        }
+        return zone.start < edit.start && edit.start < zone.end;
     }
 
     if zone.is_empty() {
@@ -131,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn structural_edits_are_blocked_but_lexical_cleanup_is_permitted() {
+    fn structural_edits_are_blocked_inside_but_not_at_zone_boundaries() {
         let zones = vec![PreservationZone {
             range: ByteRange::new(5, 10),
             reason: PreservationReason::Comment,
@@ -142,14 +145,14 @@ mod tests {
             ByteRange::new(6, 7),
             &zones
         ));
-        assert!(!edit_allowed(
+        assert!(edit_allowed(
             RuleCategory::Structural,
             ByteRange::new(5, 5),
             &zones
         ));
         assert!(edit_allowed(
             RuleCategory::Structural,
-            ByteRange::new(0, 4),
+            ByteRange::new(10, 10),
             &zones
         ));
         assert!(edit_allowed(
