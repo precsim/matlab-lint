@@ -77,9 +77,7 @@ pub fn discover_diff(
     discover_diff_from(&cwd, base, exclude_patterns)
 }
 
-pub fn discover_changed(
-    exclude_patterns: &[String],
-) -> Result<Vec<FileTarget>, DiscoveryError> {
+pub fn discover_changed(exclude_patterns: &[String]) -> Result<Vec<FileTarget>, DiscoveryError> {
     let cwd = env::current_dir().map_err(DiscoveryError::Io)?;
     discover_changed_from(&cwd, exclude_patterns)
 }
