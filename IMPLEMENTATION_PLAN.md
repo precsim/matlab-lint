@@ -161,6 +161,8 @@ paths = [
 ]
 ```
 
+Unknown rule IDs or unsupported configuration keys must be rejected as configuration errors (exit code `2`) rather than silently ignored. This prevents misspelled or future/deferred rules from producing a false sense of enforcement.
+
 Avoid a large configuration surface in v0.1. A formatter with too many style knobs becomes another dialect generator.
 
 ## 6. Rule model
@@ -318,7 +320,7 @@ Human-readable default:
 
 ```text
 src/foo.m:87:121 L001 line too long (143 > 120)
-src/foo.m:92:1   L007 use of global variable
+src/foo.m:92:18  L002 multiple statements on one line
 ```
 
 JSON mode must be stable and agent-friendly:
@@ -368,7 +370,6 @@ matlab-lint/
 │   │   ├── mod.rs
 │   │   ├── whitespace.rs
 │   │   ├── indentation.rs
-│   │   ├── blank_lines.rs
 │   │   └── punctuation.rs
 │   └── lint/
 │       ├── mod.rs
