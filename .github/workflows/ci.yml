@@ -39,3 +39,9 @@ jobs:
           test -n "$OCTAVE_BIN"
           "$OCTAVE_BIN" --version
           "$OCTAVE_BIN" --no-gui --quiet --eval "addpath('tests/octave'); run_tests"
+
+      - name: mstyle self-check format
+        run: cargo run --release -- fmt --check tests/selfcheck
+
+      - name: mstyle self-check lint
+        run: cargo run --release -- lint tests/selfcheck

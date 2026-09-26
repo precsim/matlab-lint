@@ -10,6 +10,7 @@ use clap::Parser;
 use cli::{Cli, Command, OutputFormat};
 use mstyle::config::{Config, LineEndings};
 use mstyle::diagnostic::{Diagnostic, DiagnosticReport, sort_diagnostics};
+use mstyle::discovery::{FileTarget, discover_diff, discover_paths};
 use mstyle::formatter::{FormatterOptions, LineEnding, format_source, format_source_with_parse};
 use mstyle::lint::{LintOptions, lint_source};
 use mstyle::parser::MatlabParser;
@@ -38,8 +39,12 @@ fn main() -> ExitCode {
 
 fn run_command(command: Command, config: &Config) -> ExitCode {
     match command {
-        Command::Check { paths, format } => run_check(paths, format, config),
-        Command::Fmt { paths, check } => run_fmt(paths, check, config),
+        Command::Check {
+            paths,
+            format,
+            diff,
+        } => run_check(paths, diff.as_deref(), format, config),
+        Command::Fmt { paths, check, diff } => run_fmt(paths, check, diff.as_deref(), config),
         Command::Lint { paths, format } => run_lint(paths, format, config),
     }
 }
@@ -62,43 +67,42 @@ fn lint_options(config: &Config) -> LintOptions {
     }
 }
 
-fn validate_explicit_files(paths: &[PathBuf], command: &str) -> Result<(), ExitCode> {
-    if paths.is_empty() {
-        eprintln!("mstyle: {command} requires at least one explicit .m file");
-        return Err(ExitCode::from(2));
-    }
+fn resolve_targets(
+    paths: &[PathBuf],
+    diff: Option<&str>,
+    config: &Config,
+) -> Result<Vec<FileTarget>, ExitCode> {
+    let result = match diff {
+        Some(base) => discover_diff(base, &config.exclude.paths),
+        None => discover_paths(paths, &config.exclude.paths),
+    };
 
-    for path in paths {
-        if path.extension().and_then(|extension| extension.to_str()) != Some("m") {
-            eprintln!("mstyle: {}: expected a .m file", path.display());
-            return Err(ExitCode::from(2));
-        }
-        if !path.is_file() {
-            eprintln!(
-                "mstyle: {}: explicit file paths are required until repository discovery is implemented",
-                path.display()
-            );
-            return Err(ExitCode::from(2));
-        }
-    }
-
-    Ok(())
+    result.map_err(|error| {
+        eprintln!("mstyle: discovery error: {error}");
+        ExitCode::from(2)
+    })
 }
 
-fn read_source(path: &Path) -> Result<SourceFile, ExitCode> {
-    match fs::read_to_string(path) {
-        Ok(text) => Ok(SourceFile::new(path, text)),
+fn read_source(target: &FileTarget) -> Result<SourceFile, ExitCode> {
+    match fs::read_to_string(&target.io_path) {
+        Ok(text) => Ok(SourceFile::new(&target.display_path, text)),
         Err(error) => {
-            eprintln!("mstyle: {}: {error}", path.display());
+            eprintln!("mstyle: {}: {error}", target.display_path.display());
             Err(ExitCode::from(2))
         }
     }
 }
 
-fn run_check(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) -> ExitCode {
-    if let Err(code) = validate_explicit_files(&paths, "check") {
-        return code;
-    }
+fn run_check(
+    paths: Vec<PathBuf>,
+    diff: Option<&str>,
+    output_format: OutputFormat,
+    config: &Config,
+) -> ExitCode {
+    let targets = match resolve_targets(&paths, diff, config) {
+        Ok(targets) => targets,
+        Err(code) => return code,
+    };
 
     let mut diagnostics = Vec::new();
     let mut parser = match MatlabParser::new() {
@@ -109,15 +113,15 @@ fn run_check(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) 
         }
     };
 
-    for path in paths {
-        let source = match read_source(&path) {
+    for target in targets {
+        let source = match read_source(&target) {
             Ok(source) => source,
             Err(code) => return code,
         };
         let parsed = match parser.parse(&source) {
             Ok(parsed) => parsed,
             Err(error) => {
-                eprintln!("mstyle: {}: {error}", path.display());
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         };
@@ -126,14 +130,14 @@ fn run_check(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) 
             parsed
                 .diagnostics()
                 .iter()
-                .map(|diagnostic| Diagnostic::from_parse(&path, diagnostic)),
+                .map(|diagnostic| Diagnostic::from_parse(source.path(), diagnostic)),
         );
 
         let formatted = match format_source_with_parse(&source, formatter_options(config), &parsed)
         {
             Ok(outcome) => outcome,
             Err(error) => {
-                eprintln!("mstyle: {}: {error}", path.display());
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         };
@@ -146,7 +150,7 @@ fn run_check(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) 
             ) {
                 Ok(diagnostic) => diagnostic,
                 Err(error) => {
-                    eprintln!("mstyle: {}: {error}", path.display());
+                    eprintln!("mstyle: {}: {error}", source.path().display());
                     return ExitCode::from(2);
                 }
             };
@@ -156,7 +160,7 @@ fn run_check(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) 
         match lint_source(&source, &parsed, lint_options(config)) {
             Ok(mut lint_diagnostics) => diagnostics.append(&mut lint_diagnostics),
             Err(error) => {
-                eprintln!("mstyle: {}: {error}", path.display());
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         }
@@ -166,9 +170,10 @@ fn run_check(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) 
 }
 
 fn run_lint(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) -> ExitCode {
-    if let Err(code) = validate_explicit_files(&paths, "lint") {
-        return code;
-    }
+    let targets = match resolve_targets(&paths, None, config) {
+        Ok(targets) => targets,
+        Err(code) => return code,
+    };
 
     let mut diagnostics = Vec::new();
     let mut parser = match MatlabParser::new() {
@@ -179,15 +184,15 @@ fn run_lint(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) -
         }
     };
 
-    for path in paths {
-        let source = match read_source(&path) {
+    for target in targets {
+        let source = match read_source(&target) {
             Ok(source) => source,
             Err(code) => return code,
         };
         let parsed = match parser.parse(&source) {
             Ok(parsed) => parsed,
             Err(error) => {
-                eprintln!("mstyle: {}: {error}", path.display());
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         };
@@ -196,13 +201,13 @@ fn run_lint(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) -
             parsed
                 .diagnostics()
                 .iter()
-                .map(|diagnostic| Diagnostic::from_parse(&path, diagnostic)),
+                .map(|diagnostic| Diagnostic::from_parse(source.path(), diagnostic)),
         );
 
         match lint_source(&source, &parsed, lint_options(config)) {
             Ok(mut lint_diagnostics) => diagnostics.append(&mut lint_diagnostics),
             Err(error) => {
-                eprintln!("mstyle: {}: {error}", path.display());
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         }
@@ -246,23 +251,24 @@ fn emit_diagnostics(diagnostics: &mut [Diagnostic], output_format: OutputFormat)
     }
 }
 
-fn run_fmt(paths: Vec<PathBuf>, check: bool, config: &Config) -> ExitCode {
-    if let Err(code) = validate_explicit_files(&paths, "fmt") {
-        return code;
-    }
+fn run_fmt(paths: Vec<PathBuf>, check: bool, diff: Option<&str>, config: &Config) -> ExitCode {
+    let targets = match resolve_targets(&paths, diff, config) {
+        Ok(targets) => targets,
+        Err(code) => return code,
+    };
 
     let options = formatter_options(config);
     let mut source_diagnostics = false;
 
-    for path in paths {
-        let source = match read_source(&path) {
+    for target in targets {
+        let source = match read_source(&target) {
             Ok(source) => source,
             Err(code) => return code,
         };
         let outcome = match format_source(&source, options) {
             Ok(outcome) => outcome,
             Err(error) => {
-                eprintln!("mstyle: {}: {error}", path.display());
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         };
@@ -270,7 +276,7 @@ fn run_fmt(paths: Vec<PathBuf>, check: bool, config: &Config) -> ExitCode {
         for diagnostic in outcome.parse_diagnostics() {
             eprintln!(
                 "{}:{}:{} PARSE {}",
-                path.display(),
+                source.path().display(),
                 diagnostic.start.line,
                 diagnostic.start.column,
                 diagnostic.message
@@ -280,10 +286,10 @@ fn run_fmt(paths: Vec<PathBuf>, check: bool, config: &Config) -> ExitCode {
 
         if outcome.changed() {
             if check {
-                eprintln!("{}: needs formatting", path.display());
+                eprintln!("{}: needs formatting", source.path().display());
                 source_diagnostics = true;
-            } else if let Err(error) = write_transactional(&path, outcome.output()) {
-                eprintln!("mstyle: {}: {error}", path.display());
+            } else if let Err(error) = write_transactional(&target.io_path, outcome.output()) {
+                eprintln!("mstyle: {}: {error}", source.path().display());
                 return ExitCode::from(2);
             }
         }
