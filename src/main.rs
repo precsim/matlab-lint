@@ -10,7 +10,7 @@ use clap::Parser;
 use cli::{Cli, Command, OutputFormat};
 use mstyle::config::{Config, LineEndings};
 use mstyle::diagnostic::{Diagnostic, DiagnosticReport, sort_diagnostics};
-use mstyle::discovery::{FileTarget, discover_diff, discover_paths};
+use mstyle::discovery::{FileTarget, discover_changed, discover_diff, discover_paths};
 use mstyle::formatter::{FormatterOptions, LineEnding, format_source, format_source_with_parse};
 use mstyle::lint::{LintOptions, lint_source};
 use mstyle::parser::MatlabParser;
@@ -43,7 +43,8 @@ fn run_command(command: Command, config: &Config) -> ExitCode {
             paths,
             format,
             diff,
-        } => run_check(paths, diff.as_deref(), format, config),
+            changed,
+        } => run_check(paths, diff.as_deref(), changed, format, config),
         Command::Fmt {
             paths,
             check,
@@ -81,11 +82,16 @@ fn lint_options(config: &Config) -> LintOptions {
 fn resolve_targets(
     paths: &[PathBuf],
     diff: Option<&str>,
+    changed: bool,
     config: &Config,
 ) -> Result<Vec<FileTarget>, ExitCode> {
-    let result = match diff {
-        Some(base) => discover_diff(base, &config.exclude.paths),
-        None => discover_paths(paths, &config.exclude.paths),
+    let result = if changed {
+        discover_changed(&config.exclude.paths)
+    } else {
+        match diff {
+            Some(base) => discover_diff(base, &config.exclude.paths),
+            None => discover_paths(paths, &config.exclude.paths),
+        }
     };
 
     result.map_err(|error| {
@@ -107,10 +113,11 @@ fn read_source(target: &FileTarget) -> Result<SourceFile, ExitCode> {
 fn run_check(
     paths: Vec<PathBuf>,
     diff: Option<&str>,
+    changed: bool,
     output_format: OutputFormat,
     config: &Config,
 ) -> ExitCode {
-    let targets = match resolve_targets(&paths, diff, config) {
+    let targets = match resolve_targets(&paths, diff, changed, config) {
         Ok(targets) => targets,
         Err(code) => return code,
     };
@@ -181,7 +188,7 @@ fn run_check(
 }
 
 fn run_lint(paths: Vec<PathBuf>, output_format: OutputFormat, config: &Config) -> ExitCode {
-    let targets = match resolve_targets(&paths, None, config) {
+    let targets = match resolve_targets(&paths, None, false, config) {
         Ok(targets) => targets,
         Err(code) => return code,
     };
@@ -303,7 +310,7 @@ fn run_fmt_stdin(config: &Config) -> ExitCode {
 }
 
 fn run_fmt(paths: Vec<PathBuf>, check: bool, diff: Option<&str>, config: &Config) -> ExitCode {
-    let targets = match resolve_targets(&paths, diff, config) {
+    let targets = match resolve_targets(&paths, diff, false, config) {
         Ok(targets) => targets,
         Err(code) => return code,
     };
