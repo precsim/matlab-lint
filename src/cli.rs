@@ -41,7 +41,12 @@ pub enum Command {
         check: bool,
 
         /// Format-check only MATLAB files changed relative to the merge-base with BASE.
-        #[arg(long, value_name = "BASE", conflicts_with = "paths", requires = "check")]
+        #[arg(
+            long,
+            value_name = "BASE",
+            conflicts_with = "paths",
+            requires = "check"
+        )]
         diff: Option<String>,
 
         /// Files or directories to format. Defaults to the current directory.
