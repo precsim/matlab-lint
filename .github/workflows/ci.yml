@@ -20,16 +20,16 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Rust clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Rust tests
-        run: cargo test --all-targets --all-features
+        run: cargo test --locked --all-targets --all-features
 
       - name: Release build
-        run: cargo build --release
+        run: cargo build --locked --release
 
       - name: Benchmark smoke
-        run: MSTYLE_BENCH_ITERS=10 cargo run --release --example benchmark
+        run: MSTYLE_BENCH_ITERS=10 cargo run --locked --release --example benchmark
 
       - name: Install Octave
         run: |
@@ -44,10 +44,10 @@ jobs:
           "$OCTAVE_BIN" --no-gui --quiet --eval "addpath('tests/octave'); run_tests"
 
       - name: mstyle self-check format
-        run: cargo run --release -- fmt --check tests/selfcheck
+        run: cargo run --locked --release -- fmt --check tests/selfcheck
 
       - name: mstyle self-check lint
-        run: cargo run --release -- lint tests/selfcheck
+        run: cargo run --locked --release -- lint tests/selfcheck
 
   build-platforms:
     name: Build ${{ matrix.os }}
@@ -66,4 +66,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Release build
-        run: cargo build --release
+        run: cargo build --locked --release
