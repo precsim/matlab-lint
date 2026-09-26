@@ -53,14 +53,20 @@ If no path is supplied, `check`, `fmt`, and `lint` operate recursively from the 
 
 ## Changed-file CI
 
-For gradual adoption in an existing repository, check only MATLAB files changed relative to the merge-base with another ref:
+For local work, check only staged, unstaged, and untracked MATLAB files:
+
+```bash
+mstyle check --changed
+```
+
+For gradual adoption in CI, check MATLAB files changed relative to the merge-base with another ref:
 
 ```bash
 mstyle check --diff origin/main
 mstyle fmt --check --diff origin/main
 ```
 
-`--diff` is intentionally non-mutating and is available on `check` and `fmt --check`.
+`--changed` compares tracked files with `HEAD` and also includes untracked files that are not Git-ignored. `--diff` includes branch changes from the merge-base plus current local changes. Both modes remain non-mutating.
 
 See [docs/changed-file-ci.md](docs/changed-file-ci.md) for a GitHub Actions example.
 

@@ -22,8 +22,12 @@ pub enum Command {
     /// Check formatting and lint diagnostics without modifying files.
     Check {
         /// Check only MATLAB files changed relative to the merge-base with BASE.
-        #[arg(long, value_name = "BASE", conflicts_with = "paths")]
+        #[arg(long, value_name = "BASE", conflicts_with_all = ["paths", "changed"])]
         diff: Option<String>,
+
+        /// Check only staged, unstaged, and untracked MATLAB files.
+        #[arg(long, conflicts_with_all = ["paths", "diff"])]
+        changed: bool,
 
         /// Files or directories to check. Defaults to the current directory.
         #[arg(value_name = "PATH")]
@@ -100,13 +104,42 @@ mod tests {
                 paths,
                 format,
                 diff,
+                changed,
             } => {
                 assert_eq!(paths, vec![PathBuf::from("src")]);
                 assert_eq!(format, OutputFormat::Json);
                 assert_eq!(diff, None);
+                assert!(!changed);
             }
             other => panic!("unexpected command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_check_changed_command() {
+        let cli = Cli::try_parse_from(["mstyle", "check", "--changed"]).expect("CLI should parse");
+
+        match cli.command {
+            Command::Check {
+                paths,
+                format: _,
+                diff,
+                changed,
+            } => {
+                assert!(paths.is_empty());
+                assert!(diff.is_none());
+                assert!(changed);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_check_changed_with_diff_or_paths() {
+        assert!(
+            Cli::try_parse_from(["mstyle", "check", "--changed", "--diff", "origin/main"]).is_err()
+        );
+        assert!(Cli::try_parse_from(["mstyle", "check", "--changed", "src"]).is_err());
     }
 
     #[test]
