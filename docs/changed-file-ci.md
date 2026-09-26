@@ -8,7 +8,7 @@ For gradual adoption in an existing MATLAB repository, fetch enough Git history 
     fetch-depth: 0
 
 - name: Check changed MATLAB files
-  run: cargo run --release -- check --diff origin/main
+  run: cargo run --locked --release -- check --diff origin/main
 ```
 
 `--diff <base>` resolves `merge-base(<base>, HEAD)` and checks the surviving tracked MATLAB paths changed relative to that branch point, including staged and unstaged work. It also includes untracked `.m` files that are not ignored by Git or `mstyle.toml`.

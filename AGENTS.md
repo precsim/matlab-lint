@@ -60,9 +60,9 @@ Once the Rust crate exists, run all of the following:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-cargo build --release
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo build --locked --release
 ```
 
 Then run the Octave test suite:
@@ -77,8 +77,8 @@ If the named test entry point does not yet exist because the repository is still
 After `mstyle` can operate on an end-to-end self-check corpus, also run:
 
 ```bash
-cargo run --release -- fmt --check tests/selfcheck
-cargo run --release -- lint tests/selfcheck
+cargo run --locked --release -- fmt --check tests/selfcheck
+cargo run --locked --release -- lint tests/selfcheck
 ```
 
 Do not run `fmt --check` over golden `input.m` fixtures. Those files are intentionally unformatted inputs whose expected formatted results are verified by the golden-test harness.
@@ -293,9 +293,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y octave
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo test --all-targets --all-features
-      - run: cargo build --release
+      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --all-targets --all-features
+      - run: cargo build --locked --release
       - name: Octave tests
         run: |
           OCTAVE_BIN="$(command -v octave-cli || command -v octave)"
