@@ -26,8 +26,8 @@ fn visit(node: Node<'_>, source: &str, zones: &[PreservationZone], edits: &mut V
             normalize_inline_space_before(node.start_byte(), source, zones, "F009", edits);
             normalize_space_after(node.end_byte(), source, zones, "F009", edits);
         }
-        "+" | ".+" | "-" | ".-" | "*" | ".*" | "/" | "./" | "\\" | ".\\" | "^" | ".^"
-        | "|" | "&"
+        "+" | ".+" | "-" | ".-" | "*" | ".*" | "/" | "./" | "\\" | ".\\" | "^" | ".^" | "|"
+        | "&"
             if binary_operator(node) && token_allowed(node, zones) =>
         {
             normalize_inline_space_before(node.start_byte(), source, zones, "F010", edits);
@@ -278,10 +278,7 @@ mod tests {
         let source = SourceFile::new("ambiguous.m", "function y=f(a)\ny=1./a;\nend\n");
         let outcome = format_source(&source, FormatterOptions::default()).expect("format");
 
-        assert_eq!(
-            outcome.output(),
-            "function y = f(a)\n  y = 1./a;\nend\n"
-        );
+        assert_eq!(outcome.output(), "function y = f(a)\n  y = 1./a;\nend\n");
         assert!(!outcome.edits().iter().any(|edit| edit.rule_id == "F010"));
     }
 }
