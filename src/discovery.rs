@@ -592,9 +592,9 @@ fn fossil_baseline_sources(
         }
         quoted_paths.push(format!("'{}'", text.replace('\'', "''")));
     }
-    let checkout = checkout.replace('\'', "''");
+    let checkout_sql = checkout.replace('\'', "''");
     let query = format!(
-        "SELECT filename, hex(content(uuid)) FROM files_of_checkin('{checkout}') \
+        "SELECT filename, length(content(uuid)) FROM files_of_checkin('{checkout_sql}') \
          WHERE filename IN ({}) ORDER BY filename;",
         quoted_paths.join(",")
     );
@@ -612,50 +612,67 @@ fn fossil_baseline_sources(
     )?;
     let output = std::str::from_utf8(&output).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
 
-    let mut sources = BTreeMap::new();
+    let mut entries = Vec::new();
     for line in output.lines() {
-        let (path, hex) = line.split_once('\t').ok_or_else(|| {
+        let (path, size) = line.split_once('\t').ok_or_else(|| {
             DiscoveryError::Fossil("unexpected output from fossil sql".to_owned())
         })?;
-        let bytes = decode_hex(hex).map_err(DiscoveryError::Fossil)?;
-        let source = String::from_utf8(bytes)
-            .map_err(|_| DiscoveryError::NonUtf8Source(PathBuf::from(path)))?;
-        sources.insert(PathBuf::from(path), source);
+        let size = size.parse::<usize>().map_err(|_| {
+            DiscoveryError::Fossil(format!("invalid baseline size for {path:?}"))
+        })?;
+        entries.push((PathBuf::from(path), size));
     }
 
     for path in paths {
-        if !sources.contains_key(path) {
+        if !entries.iter().any(|(entry, _)| entry == path) {
             return Err(DiscoveryError::Fossil(format!(
                 "baseline source not found for {}",
                 path.display()
             )));
         }
     }
+
+    let mut command = Command::new("fossil");
+    command
+        .current_dir(root)
+        .arg("cat")
+        .arg("-r")
+        .arg(checkout);
+    for (path, _) in &entries {
+        command.arg(path);
+    }
+    let output = command.output().map_err(DiscoveryError::Io)?;
+    if !output.status.success() {
+        let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(DiscoveryError::Fossil(if message.is_empty() {
+            format!("fossil cat exited with {}", output.status)
+        } else {
+            message
+        }));
+    }
+
+    let mut sources = BTreeMap::new();
+    let mut cursor = 0;
+    for (path, size) in entries {
+        let end = cursor.checked_add(size).ok_or_else(|| {
+            DiscoveryError::Fossil("baseline content size overflow".to_owned())
+        })?;
+        let bytes = output.stdout.get(cursor..end).ok_or_else(|| {
+            DiscoveryError::Fossil("truncated output from fossil cat".to_owned())
+        })?;
+        let source = std::str::from_utf8(bytes)
+            .map_err(|_| DiscoveryError::NonUtf8Source(path.clone()))?
+            .to_owned();
+        sources.insert(path, source);
+        cursor = end;
+    }
+    if cursor != output.stdout.len() {
+        return Err(DiscoveryError::Fossil(
+            "unexpected trailing output from fossil cat".to_owned(),
+        ));
+    }
+
     Ok(sources)
-}
-
-fn decode_hex(hex: &str) -> Result<Vec<u8>, String> {
-    if !hex.len().is_multiple_of(2) {
-        return Err("fossil sql returned odd-length hex content".to_owned());
-    }
-    let mut bytes = Vec::with_capacity(hex.len() / 2);
-    for pair in hex.as_bytes().as_chunks::<2>().0 {
-        let high = hex_nibble(pair[0])
-            .ok_or_else(|| "fossil sql returned invalid hex content".to_owned())?;
-        let low = hex_nibble(pair[1])
-            .ok_or_else(|| "fossil sql returned invalid hex content".to_owned())?;
-        bytes.push((high << 4) | low);
-    }
-    Ok(bytes)
-}
-
-fn hex_nibble(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
 }
 
 fn sort_changed_files(files: &mut [ChangedFile]) {
