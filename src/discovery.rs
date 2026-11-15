@@ -630,9 +630,28 @@ fn fossil_baseline_sources(
 
     for path in paths {
         if !entries.iter().any(|(entry, _)| entry == path) {
+            let diagnostic = run_fossil(
+                root,
+                &[
+                    "sql",
+                    "--readonly",
+                    "-batch",
+                    "-noheader",
+                    "SELECT printf('checkout=%s', value) FROM localdb.vvar WHERE name='checkout'; \
+                     SELECT printf('vfile=%d|%d|%d|%d|%s|%s', vid, deleted, rid, mrid, \
+                         pathname, coalesce(origname, '<null>')) \
+                     FROM localdb.vfile \
+                     WHERE deleted OR chnged OR rid=0 OR origname IS NOT NULL \
+                     ORDER BY pathname;",
+                ],
+            )
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .map(|text| text.trim().to_owned())
+            .unwrap_or_else(|| "<unavailable>".to_owned());
             return Err(DiscoveryError::Fossil(format!(
-                "baseline source not found for {}",
-                path.display()
+                "baseline source not found for {}; checkout metadata: {diagnostic}",
+                path.display(),
             )));
         }
     }
