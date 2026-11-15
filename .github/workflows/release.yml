@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag matching Cargo.toml (for example v0.1.0)
+        description: Release tag matching Cargo.toml (for example vX.Y.Z)
         required: true
         type: string
   pull_request:

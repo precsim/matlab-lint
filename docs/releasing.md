@@ -2,10 +2,10 @@
 
 Binary releases are built from a release tag that must exactly match the package version in `Cargo.toml`.
 
-For `version = "0.1.0"`, the release tag is:
+For package version `X.Y.Z`, the release tag is:
 
 ```text
-v0.1.0
+vX.Y.Z
 ```
 
 ## Manual release from GitHub Actions
@@ -14,7 +14,7 @@ The preferred release path does not require creating a local Git tag:
 
 1. open **Actions → Release binaries → Run workflow**,
 2. select the `main` branch,
-3. enter the matching release tag, for example `v0.1.0`,
+3. enter the matching release tag, for example `vX.Y.Z`,
 4. run the workflow.
 
 Before any binaries are built, the workflow verifies that:
@@ -30,8 +30,8 @@ After every packaged-binary smoke test passes, the publish job creates the tag a
 Creating and pushing the matching tag remains supported:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 The workflow validates that the pushed tag still matches `Cargo.toml` before building and publishing it.
