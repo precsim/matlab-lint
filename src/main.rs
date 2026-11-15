@@ -152,9 +152,7 @@ fn emit_diff_analysis(
                     .unwrap_or("<unknown>");
                 println!(
                     "file: {path} class={} parse_confidence={} embedded_test_regions_touched={}",
-                    file.classification,
-                    file.parse_confidence,
-                    file.embedded_test_regions_touched
+                    file.classification, file.parse_confidence, file.embedded_test_regions_touched
                 );
                 for function in &file.functions {
                     println!("function: {} {}", function.change, function.name);

@@ -3,12 +3,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use mstyle::config::DiffVcs;
 use mstyle::config::DiffConfig;
+use mstyle::config::DiffVcs;
 use mstyle::diff::analyze_diff;
-use mstyle::discovery::{
-    ChangeKind, ChangedFile, ChangedWorkspace, discover_working_tree_changes,
-};
+use mstyle::discovery::{ChangeKind, ChangedFile, ChangedWorkspace, discover_working_tree_changes};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -110,11 +108,7 @@ fn fossil_workspace() -> (PathBuf, Vec<ChangedFile>) {
 
     make_working_changes(&checkout);
     run(&checkout, "fossil", &["add", "added.m"]);
-    run(
-        &checkout,
-        "fossil",
-        &["mv", "--hard", "old.m", "renamed.m"],
-    );
+    run(&checkout, "fossil", &["mv", "--hard", "old.m", "renamed.m"]);
     run(
         &checkout,
         "fossil",
@@ -125,11 +119,7 @@ fn fossil_workspace() -> (PathBuf, Vec<ChangedFile>) {
         "fossil",
         &["mv", "--hard", "to_matlab.txt", "to_matlab.m"],
     );
-    run(
-        &checkout,
-        "fossil",
-        &["rm", "--hard", "deleted.m"],
-    );
+    run(&checkout, "fossil", &["rm", "--hard", "deleted.m"]);
 
     let workspace =
         discover_working_tree_changes(&checkout, DiffVcs::Fossil).expect("discover Fossil changes");

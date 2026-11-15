@@ -31,10 +31,7 @@ fn git(root: &Path, args: &[&str]) {
 fn repository(name: &str, base: &str) -> PathBuf {
     let root = temp_dir(name);
     git(&root, &["init", "-q"]);
-    git(
-        &root,
-        &["config", "user.email", "test@example.invalid"],
-    );
+    git(&root, &["config", "user.email", "test@example.invalid"]);
     git(&root, &["config", "user.name", "mstyle test"]);
     fs::write(root.join("sample.m"), base).expect("write base");
     git(&root, &["add", "."]);
@@ -80,11 +77,15 @@ fn advisory_review_reports_policy_but_exits_successfully() {
     assert_eq!(json["decision"], "REVIEW");
     assert_eq!(json["advisory"], true);
     assert_eq!(json["metrics"]["added_executable_lines"], 1);
-    assert!(json["triggers"].as_array().expect("triggers").iter().any(
-        |trigger| trigger["id"]
-            .as_str()
-            .is_some_and(|id| id.contains("added_lines"))
-    ));
+    assert!(
+        json["triggers"]
+            .as_array()
+            .expect("triggers")
+            .iter()
+            .any(|trigger| trigger["id"]
+                .as_str()
+                .is_some_and(|id| id.contains("added_lines")))
+    );
 
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -194,9 +195,7 @@ fn vcs_failure_is_exit_two() {
 
     let output = diff_check(&root, &config, &["--vcs", "git"]);
     assert_eq!(output.status.code(), Some(2));
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("diff discovery error")
-    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("diff discovery error"));
 
     fs::remove_dir_all(root).expect("cleanup");
 }

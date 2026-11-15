@@ -3,15 +3,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use mstyle::config::{
-    DiffConfig, DiffFactKindConfig, DiffRiskConfig, DiffRiskMatch, DiffRiskSeverity,
-    DiffThreshold, DiffThresholdProfile,
+    DiffConfig, DiffFactKindConfig, DiffRiskConfig, DiffRiskMatch, DiffRiskSeverity, DiffThreshold,
+    DiffThresholdProfile,
 };
-use mstyle::diff::{
-    DiffDecision, FileClass, ParseConfidence, SemanticFactKind, analyze_diff,
-};
-use mstyle::discovery::{
-    ChangeKind, ChangedFile, ChangedWorkspace, DetectedVcs,
-};
+use mstyle::diff::{DiffDecision, FileClass, ParseConfidence, SemanticFactKind, analyze_diff};
+use mstyle::discovery::{ChangeKind, ChangedFile, ChangedWorkspace, DetectedVcs};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -117,10 +113,14 @@ fn reports_structural_spread_sections_and_test_metrics_separately() {
     assert_eq!(analysis.profiles.len(), 1);
     assert_eq!(analysis.profiles[0].name, "source");
     assert!(analysis.triggers.iter().any(|trigger| {
-        trigger.id.contains("THRESHOLD.general.files_touched.REVIEW")
+        trigger
+            .id
+            .contains("THRESHOLD.general.files_touched.REVIEW")
     }));
     assert!(analysis.triggers.iter().any(|trigger| {
-        trigger.id.contains("THRESHOLD.profile:source.functions_touched.REVIEW")
+        trigger
+            .id
+            .contains("THRESHOLD.profile:source.functions_touched.REVIEW")
     }));
 }
 
@@ -172,18 +172,17 @@ fn zero_width_missing_at_changed_boundary_forces_review() {
     )
     .expect("analyze");
 
-    assert_eq!(analysis.files[0].parse_confidence, ParseConfidence::Recovered);
+    assert_eq!(
+        analysis.files[0].parse_confidence,
+        ParseConfidence::Recovered
+    );
     assert_eq!(analysis.decision, DiffDecision::Review);
 }
 
 #[test]
 fn ambiguous_parentheses_emit_call_or_index_fact_with_target() {
     let analysis = analyze_diff(
-        &workspace(vec![modified(
-            "ambiguous.m",
-            "x = A(1);\n",
-            "x = A(2);\n",
-        )]),
+        &workspace(vec![modified("ambiguous.m", "x = A(1);\n", "x = A(2);\n")]),
         &DiffConfig::default(),
     )
     .expect("analyze");
@@ -193,7 +192,11 @@ fn ambiguous_parentheses_emit_call_or_index_fact_with_target() {
         .iter()
         .find(|fact| fact.kind == SemanticFactKind::CallOrIndexChanged)
         .expect("call/index fact");
-    assert!(fact.call_or_index_targets.iter().any(|target| target == "A"));
+    assert!(
+        fact.call_or_index_targets
+            .iter()
+            .any(|target| target == "A")
+    );
 }
 
 #[test]
@@ -211,11 +214,7 @@ fn contextual_risk_matches_one_fact_occurrence_and_raises_policy() {
     let analysis = analyze_diff(
         &workspace(vec![modified(
             "assemble.m",
-            concat!(
-                "function y = assemble(x)\n",
-                "  y = eval(x);\n",
-                "end\n",
-            ),
+            concat!("function y = assemble(x)\n", "  y = eval(x);\n", "end\n",),
             concat!(
                 "function y = assemble(x)\n",
                 "  y = eval(x + 1);\n",
@@ -227,9 +226,12 @@ fn contextual_risk_matches_one_fact_occurrence_and_raises_policy() {
     .expect("analyze");
 
     assert_eq!(analysis.decision, DiffDecision::Review);
-    assert!(analysis.triggers.iter().any(|trigger| {
-        trigger.id == "DYNAMIC_EVALUATION_CHANGE"
-    }));
+    assert!(
+        analysis
+            .triggers
+            .iter()
+            .any(|trigger| { trigger.id == "DYNAMIC_EVALUATION_CHANGE" })
+    );
 }
 
 #[test]
@@ -257,7 +259,12 @@ fn contextual_selectors_do_not_match_across_distinct_fact_occurrences() {
     )
     .expect("analyze");
 
-    assert!(!analysis.triggers.iter().any(|trigger| trigger.id == "SPLIT_CONTEXT"));
+    assert!(
+        !analysis
+            .triggers
+            .iter()
+            .any(|trigger| trigger.id == "SPLIT_CONTEXT")
+    );
     assert_eq!(analysis.decision, DiffDecision::Accept);
 }
 
@@ -280,9 +287,12 @@ fn public_api_inventory_is_rooted_and_normalized() {
     };
 
     let analysis = analyze_diff(&workspace, &config).expect("analyze");
-    assert!(analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::PublicApiSignatureChanged
-    }));
+    assert!(
+        analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::PublicApiSignatureChanged })
+    );
 
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -327,9 +337,12 @@ fn pure_deletion_counts_old_executable_lines_and_function_deletion() {
 
     assert_eq!(analysis.metrics.added_executable_lines, 0);
     assert!(analysis.metrics.deleted_executable_lines >= 1);
-    assert!(analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::FunctionDeleted
-    }));
+    assert!(
+        analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::FunctionDeleted })
+    );
 }
 
 #[test]
@@ -358,12 +371,14 @@ fn local_function_change_maps_to_the_local_function() {
     )
     .expect("analyze");
 
-    assert!(analysis.files[0].functions.iter().any(|function| {
-        function.name == "local_helper"
-    }));
+    assert!(
+        analysis.files[0]
+            .functions
+            .iter()
+            .any(|function| { function.name == "local_helper" })
+    );
     assert!(!analysis.files[0].functions.iter().any(|function| {
-        function.change == mstyle::diff::FunctionChangeKind::Touched
-            && function.name == "primary"
+        function.change == mstyle::diff::FunctionChangeKind::Touched && function.name == "primary"
     }));
 }
 
@@ -395,8 +410,18 @@ fn rename_matches_old_and_new_path_profiles_independently() {
 
     let analysis = analyze_diff(&workspace, &config).expect("analyze");
     assert_eq!(analysis.profiles.len(), 2);
-    assert!(analysis.profiles.iter().any(|profile| profile.name == "old"));
-    assert!(analysis.profiles.iter().any(|profile| profile.name == "new"));
+    assert!(
+        analysis
+            .profiles
+            .iter()
+            .any(|profile| profile.name == "old")
+    );
+    assert!(
+        analysis
+            .profiles
+            .iter()
+            .any(|profile| profile.name == "new")
+    );
     assert_eq!(analysis.decision, DiffDecision::Review);
 }
 
@@ -432,9 +457,12 @@ fn local_signature_change_does_not_emit_public_api_signature_fact() {
     };
 
     let analysis = analyze_diff(&workspace, &config).expect("analyze");
-    assert!(!analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::PublicApiSignatureChanged
-    }));
+    assert!(
+        !analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::PublicApiSignatureChanged })
+    );
     assert!(analysis.files[0].facts.iter().any(|fact| {
         fact.kind == SemanticFactKind::FunctionSignatureChanged
             && fact.enclosing_function.as_deref() == Some("helper")
@@ -480,9 +508,12 @@ fn generated_and_test_classification_follow_the_current_rename_path() {
     assert_eq!(analysis.metrics.files_touched, 2);
     assert_eq!(analysis.test_metrics.files_touched, 0);
     assert_eq!(analysis.generated_files, vec!["generated/c.m"]);
-    assert!(analysis.files.iter().all(|file| {
-        file.classification == FileClass::Implementation
-    }));
+    assert!(
+        analysis
+            .files
+            .iter()
+            .all(|file| { file.classification == FileClass::Implementation })
+    );
 }
 
 #[test]
@@ -499,7 +530,10 @@ fn unchanged_sibling_call_does_not_emit_call_or_index_fact() {
 
     assert!(!analysis.files[0].facts.iter().any(|fact| {
         fact.kind == SemanticFactKind::CallOrIndexChanged
-            && fact.call_or_index_targets.iter().any(|target| target == "eval")
+            && fact
+                .call_or_index_targets
+                .iter()
+                .any(|target| target == "eval")
     }));
 }
 
@@ -508,25 +542,20 @@ fn body_only_edit_does_not_change_control_flow_complexity_or_fact() {
     let analysis = analyze_diff(
         &workspace(vec![modified(
             "branch.m",
-            concat!(
-                "if x > 0\n",
-                "  y = 1;\n",
-                "end\n",
-            ),
-            concat!(
-                "if x > 0\n",
-                "  y = 2;\n",
-                "end\n",
-            ),
+            concat!("if x > 0\n", "  y = 1;\n", "end\n",),
+            concat!("if x > 0\n", "  y = 2;\n", "end\n",),
         )]),
         &DiffConfig::default(),
     )
     .expect("analyze");
 
     assert_eq!(analysis.metrics.control_flow_increase, 0);
-    assert!(!analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::ControlFlowChanged
-    }));
+    assert!(
+        !analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::ControlFlowChanged })
+    );
 }
 
 #[test]
@@ -535,11 +564,7 @@ fn adding_one_if_adds_one_control_flow_point() {
         &workspace(vec![modified(
             "branch.m",
             "y = x;\n",
-            concat!(
-                "if x > 0\n",
-                "  y = x;\n",
-                "end\n",
-            ),
+            concat!("if x > 0\n", "  y = x;\n", "end\n",),
         )]),
         &DiffConfig::default(),
     )
@@ -563,16 +588,17 @@ fn public_api_signature_change_survives_rename_out_of_inventory_path() {
             old_path: Some(PathBuf::from("src/foo.m")),
             new_path: Some(PathBuf::from("moved/foo.m")),
             old_source: Some("function y = foo(x)\n  y = x;\nend\n".to_owned()),
-            new_source: Some(
-                "function y = foo(x, scale)\n  y = x * scale;\nend\n".to_owned(),
-            ),
+            new_source: Some("function y = foo(x, scale)\n  y = x * scale;\nend\n".to_owned()),
         }],
     };
 
     let analysis = analyze_diff(&workspace, &config).expect("analyze");
-    assert!(analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::PublicApiSignatureChanged
-    }));
+    assert!(
+        analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::PublicApiSignatureChanged })
+    );
 
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -635,9 +661,12 @@ fn inventoried_script_local_function_is_not_public_api_primary() {
     };
 
     let analysis = analyze_diff(&workspace, &config).expect("analyze");
-    assert!(!analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::PublicApiSignatureChanged
-    }));
+    assert!(
+        !analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::PublicApiSignatureChanged })
+    );
 
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -676,12 +705,18 @@ fn inventoried_class_method_signature_is_not_public_api_primary() {
     };
 
     let analysis = analyze_diff(&workspace, &config).expect("analyze");
-    assert!(!analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::PublicApiSignatureChanged
-    }));
-    assert!(analysis.files[0].facts.iter().any(|fact| {
-        fact.kind == SemanticFactKind::FunctionSignatureChanged
-    }));
+    assert!(
+        !analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::PublicApiSignatureChanged })
+    );
+    assert!(
+        analysis.files[0]
+            .facts
+            .iter()
+            .any(|fact| { fact.kind == SemanticFactKind::FunctionSignatureChanged })
+    );
 
     fs::remove_dir_all(root).expect("cleanup");
 }
@@ -705,8 +740,7 @@ fn standalone_abstract_method_signature_is_counted_as_a_function() {
 
     assert!(analysis.metrics.functions_added >= 1);
     assert!(analysis.files[0].functions.iter().any(|function| {
-        function.name == "value"
-            && function.change == mstyle::diff::FunctionChangeKind::Added
+        function.name == "value" && function.change == mstyle::diff::FunctionChangeKind::Added
     }));
 }
 
@@ -799,8 +833,7 @@ fn overlapping_profiles_all_apply_and_highest_severity_wins() {
         trigger.scope == "profile:broad" && trigger.severity == DiffDecision::Review
     }));
     assert!(analysis.triggers.iter().any(|trigger| {
-        trigger.scope == "profile:sensitive"
-            && trigger.severity == DiffDecision::RejectSplit
+        trigger.scope == "profile:sensitive" && trigger.severity == DiffDecision::RejectSplit
     }));
 }
 

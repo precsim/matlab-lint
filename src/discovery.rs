@@ -175,10 +175,7 @@ fn discover_git_working_tree(cwd: &Path) -> Result<ChangedWorkspace, DiscoveryEr
             "--",
         ],
     )?;
-    let untracked = run_git(
-        &root,
-        ["ls-files", "--others", "--exclude-standard", "-z"],
-    )?;
+    let untracked = run_git(&root, ["ls-files", "--others", "--exclude-standard", "-z"])?;
 
     let mut records = parse_git_name_status(&tracked)?;
     for path in nul_paths(&untracked)? {
@@ -354,10 +351,7 @@ fn parse_git_name_status(bytes: &[u8]) -> Result<Vec<ChangeRecord>, DiscoveryErr
     Ok(records)
 }
 
-fn git_head_sources(
-    root: &Path,
-    paths: &[PathBuf],
-) -> Result<Vec<Option<String>>, DiscoveryError> {
+fn git_head_sources(root: &Path, paths: &[PathBuf]) -> Result<Vec<Option<String>>, DiscoveryError> {
     if paths.is_empty() {
         return Ok(Vec::new());
     }
@@ -377,9 +371,7 @@ fn git_head_sources(
             .as_mut()
             .ok_or_else(|| DiscoveryError::Git("failed to open git cat-file stdin".to_owned()))?;
         for path in paths {
-            let path = path
-                .to_str()
-                .ok_or(DiscoveryError::NonUtf8GitOutput)?;
+            let path = path.to_str().ok_or(DiscoveryError::NonUtf8GitOutput)?;
             if path.contains('\n') || path.contains('\r') {
                 return Err(DiscoveryError::Git(
                     "newline in path is not supported by diff-check".to_owned(),
@@ -420,7 +412,9 @@ fn git_head_sources(
             .split_whitespace()
             .last()
             .and_then(|value| value.parse::<usize>().ok())
-            .ok_or_else(|| DiscoveryError::Git(format!("invalid git cat-file header {header:?}")))?;
+            .ok_or_else(|| {
+                DiscoveryError::Git(format!("invalid git cat-file header {header:?}"))
+            })?;
         if cursor + size > output.stdout.len() {
             return Err(DiscoveryError::Git(
                 "truncated git cat-file content".to_owned(),
@@ -444,17 +438,17 @@ fn discover_fossil_working_tree(cwd: &Path) -> Result<ChangedWorkspace, Discover
     let root = fossil_local_root(info)?;
     let checkout = fossil_checkout_id(info)?;
 
-    let changes = run_fossil(
-        &root,
-        &["changes", "--classify", "--rel-paths"],
-    )?;
+    let changes = run_fossil(&root, &["changes", "--classify", "--rel-paths"])?;
     let extras = run_fossil(&root, &["extras", "--rel-paths"])?;
-    let changes =
-        std::str::from_utf8(&changes).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
+    let changes = std::str::from_utf8(&changes).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
     let extras = std::str::from_utf8(&extras).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
 
     let mut records = parse_fossil_changes(changes)?;
-    for line in extras.lines().map(str::trim).filter(|line| !line.is_empty()) {
+    for line in extras
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
         let path = PathBuf::from(line);
         if is_matlab_file(&path) {
             records.push(ChangeRecord {
@@ -481,9 +475,7 @@ fn discover_fossil_working_tree(cwd: &Path) -> Result<ChangedWorkspace, Discover
         let old_path = record.old_path;
         let new_path = record.new_path;
 
-        let old_source = old_path
-            .as_ref()
-            .and_then(|path| old_sources.remove(path));
+        let old_source = old_path.as_ref().and_then(|path| old_sources.remove(path));
         let new_source = match new_path.as_ref() {
             Some(path) => Some(
                 fs::read_to_string(root.join(path))
@@ -528,7 +520,11 @@ fn fossil_checkout_id(info: &str) -> Result<String, DiscoveryError> {
 
 fn parse_fossil_changes(changes: &str) -> Result<Vec<ChangeRecord>, DiscoveryError> {
     let mut records = Vec::new();
-    for line in changes.lines().map(str::trim).filter(|line| !line.is_empty()) {
+    for line in changes
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
         let mut parts = line.splitn(2, char::is_whitespace);
         let status = parts.next().unwrap_or_default();
         let remainder = parts.next().unwrap_or_default().trim();
@@ -555,8 +551,9 @@ fn parse_fossil_changes(changes: &str) -> Result<Vec<ChangeRecord>, DiscoveryErr
                     "fossil reported rename without old/new paths: {line}"
                 )));
             }
-            "EDITED" | "CONFLICT" | "MERGED" | "UPDATED_BY_MERGE"
-            | "UPDATED_BY_INTEGRATE" => ChangeKind::Modified,
+            "EDITED" | "CONFLICT" | "MERGED" | "UPDATED_BY_MERGE" | "UPDATED_BY_INTEGRATE" => {
+                ChangeKind::Modified
+            }
             _ => {
                 return Err(DiscoveryError::Fossil(format!(
                     "unsupported fossil change status {status:?}"
@@ -584,9 +581,7 @@ fn fossil_baseline_sources(
 
     let mut quoted_paths = Vec::with_capacity(paths.len());
     for path in paths {
-        let text = path
-            .to_str()
-            .ok_or(DiscoveryError::NonUtf8FossilOutput)?;
+        let text = path.to_str().ok_or(DiscoveryError::NonUtf8FossilOutput)?;
         if text
             .chars()
             .any(|character| matches!(character, '\n' | '\r' | '\t'))
@@ -615,8 +610,7 @@ fn fossil_baseline_sources(
             &query,
         ],
     )?;
-    let output =
-        std::str::from_utf8(&output).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
+    let output = std::str::from_utf8(&output).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
 
     let mut sources = BTreeMap::new();
     for line in output.lines() {
@@ -899,10 +893,9 @@ impl fmt::Display for DiscoveryError {
             Self::NotMatlabFile(path) => write!(formatter, "{} is not a .m file", path.display()),
             Self::Git(message) => write!(formatter, "git error: {message}"),
             Self::Fossil(message) => write!(formatter, "fossil error: {message}"),
-            Self::VcsDetection => write!(
-                formatter,
-                "could not detect a Git or Fossil working tree"
-            ),
+            Self::VcsDetection => {
+                write!(formatter, "could not detect a Git or Fossil working tree")
+            }
             Self::NonUtf8GitOutput => write!(formatter, "git returned a non-UTF-8 path"),
             Self::NonUtf8FossilOutput => write!(formatter, "fossil returned non-UTF-8 output"),
             Self::NonUtf8Source(path) => {

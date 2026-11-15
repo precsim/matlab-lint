@@ -268,8 +268,11 @@ pub fn analyze_diff(
     workspace: &ChangedWorkspace,
     config: &DiffConfig,
 ) -> Result<DiffAnalysis, DiffError> {
-    let generated_matcher =
-        PathMatcher::new(&workspace.root, &config.generated_paths, "diff.generated_paths")?;
+    let generated_matcher = PathMatcher::new(
+        &workspace.root,
+        &config.generated_paths,
+        "diff.generated_paths",
+    )?;
     let test_matcher = PathMatcher::new(&workspace.root, &config.test_paths, "diff.test_paths")?;
     let public_api = load_public_api_inventory(&workspace.root, config)?;
     let mut parser = MatlabParser::new().map_err(DiffError::Parser)?;
@@ -426,14 +429,18 @@ fn analyze_file(
 ) -> Result<FileAnalysis, DiffError> {
     let old_path = changed.old_path.as_deref();
     let new_path = changed.new_path.as_deref();
-    let old_file = changed
-        .old_source
-        .as_ref()
-        .map(|source| SourceFile::new(old_path.unwrap_or_else(|| Path::new("<old>")), source.clone()));
-    let new_file = changed
-        .new_source
-        .as_ref()
-        .map(|source| SourceFile::new(new_path.unwrap_or_else(|| Path::new("<new>")), source.clone()));
+    let old_file = changed.old_source.as_ref().map(|source| {
+        SourceFile::new(
+            old_path.unwrap_or_else(|| Path::new("<old>")),
+            source.clone(),
+        )
+    });
+    let new_file = changed.new_source.as_ref().map(|source| {
+        SourceFile::new(
+            new_path.unwrap_or_else(|| Path::new("<new>")),
+            source.clone(),
+        )
+    });
 
     let old_parse = old_file
         .as_ref()
@@ -556,16 +563,8 @@ fn analyze_file(
         .collect::<BTreeMap<_, _>>();
 
     let mut touched_keys = BTreeSet::new();
-    collect_smallest_touched_functions(
-        &old_functions,
-        &old_exec_line_ranges,
-        &mut touched_keys,
-    );
-    collect_smallest_touched_functions(
-        &new_functions,
-        &new_exec_line_ranges,
-        &mut touched_keys,
-    );
+    collect_smallest_touched_functions(&old_functions, &old_exec_line_ranges, &mut touched_keys);
+    collect_smallest_touched_functions(&new_functions, &new_exec_line_ranges, &mut touched_keys);
 
     let added_keys = new_function_map
         .keys()
@@ -597,8 +596,7 @@ fn analyze_file(
     let old_sections_touched = sections_touched(&old_sections, &old_changed_all);
     let new_sections_touched = sections_touched(&new_sections, &new_changed_all);
     let sections_touched_count = old_sections_touched.len().max(new_sections_touched.len());
-    let added_section_indices =
-        added_sections_by_chunks(&chunks, &old_sections, &new_sections);
+    let added_section_indices = added_sections_by_chunks(&chunks, &old_sections, &new_sections);
     let old_embedded_tests = collect_embedded_test_regions(&old_lines);
     let new_embedded_tests = collect_embedded_test_regions(&new_lines);
     let embedded_test_regions_touched = sections_touched(&old_embedded_tests, &old_changed_all)
@@ -683,9 +681,7 @@ fn analyze_file(
             new_file.as_ref(),
         )?);
     }
-    functions.sort_by(|left, right| {
-        (&left.name, left.change).cmp(&(&right.name, right.change))
-    });
+    functions.sort_by(|left, right| (&left.name, left.change).cmp(&(&right.name, right.change)));
 
     let mut facts = Vec::new();
     if let Some((source, parsed, path)) = old_file
@@ -932,7 +928,9 @@ fn collect_functions(
             signature_range,
             signature_fingerprint,
             is_primary: node.kind() == "function_definition"
-                && node.parent().is_some_and(|parent| parent.kind() == "source_file")
+                && node
+                    .parent()
+                    .is_some_and(|parent| parent.kind() == "source_file")
                 && primary_start == Some(node.start_byte()),
         });
     }
@@ -959,10 +957,7 @@ fn first_function_file_primary_start(root: Node<'_>) -> Option<usize> {
         .map(|child| child.start_byte())
 }
 
-fn function_owner_chain(
-    mut node: Node<'_>,
-    source: &SourceFile,
-) -> Result<Vec<String>, DiffError> {
+fn function_owner_chain(mut node: Node<'_>, source: &SourceFile) -> Result<Vec<String>, DiffError> {
     let mut owners = Vec::new();
     while let Some(parent) = node.parent() {
         if matches!(parent.kind(), "function_definition" | "function_signature") {
@@ -1135,8 +1130,12 @@ fn syntax_fact_kind(kind: &str) -> Option<SemanticFactKind> {
         "persistent_operator" => Some(SemanticFactKind::PersistentChanged),
         "global_operator" => Some(SemanticFactKind::GlobalChanged),
         "assignment" => Some(SemanticFactKind::AssignmentChanged),
-        "number" | "binary_operator" | "unary_operator" | "boolean_operator"
-        | "comparison_operator" | "range" => Some(SemanticFactKind::NumericExpressionChanged),
+        "number"
+        | "binary_operator"
+        | "unary_operator"
+        | "boolean_operator"
+        | "comparison_operator"
+        | "range" => Some(SemanticFactKind::NumericExpressionChanged),
         "function_call" => Some(SemanticFactKind::CallOrIndexChanged),
         "if_statement" | "elseif_clause" | "for_statement" | "while_statement"
         | "switch_statement" | "case_clause" | "otherwise_clause" | "try_statement"
@@ -1186,9 +1185,7 @@ fn make_syntax_fact(
 
     let enclosing_function = functions
         .iter()
-        .filter(|function| {
-            function.range.start <= range.start && range.end <= function.range.end
-        })
+        .filter(|function| function.range.start <= range.start && range.end <= function.range.end)
         .min_by_key(|function| function.range.end - function.range.start)
         .map(|function| function.name.clone());
 
@@ -1230,7 +1227,12 @@ fn collect_context(
         }
         "field_expression" => {
             let value = source.slice(range).map_err(DiffError::Position)?;
-            field_paths.insert(value.chars().filter(|character| !character.is_whitespace()).collect());
+            field_paths.insert(
+                value
+                    .chars()
+                    .filter(|character| !character.is_whitespace())
+                    .collect(),
+            );
         }
         "function_call" => {
             if let Some(name) = node.child_by_field_name("name") {
@@ -1423,13 +1425,12 @@ fn line_table(source: &str) -> Vec<LineInfo> {
         } else {
             end
         };
-        let content_end = if content_end > start
-            && source.as_bytes().get(content_end - 1) == Some(&b'\r')
-        {
-            content_end - 1
-        } else {
-            content_end
-        };
+        let content_end =
+            if content_end > start && source.as_bytes().get(content_end - 1) == Some(&b'\r') {
+                content_end - 1
+            } else {
+                content_end
+            };
         lines.push(LineInfo {
             start,
             end,
@@ -1466,15 +1467,7 @@ fn formatting_equivalence_chunks(chunk: DiffChunk) -> Vec<DiffChunk> {
 
 fn diff_chunks(old: &[LineInfo], new: &[LineInfo]) -> Vec<DiffChunk> {
     let mut chunks = Vec::new();
-    diff_chunks_range(
-        old,
-        0,
-        old.len(),
-        new,
-        0,
-        new.len(),
-        &mut chunks,
-    );
+    diff_chunks_range(old, 0, old.len(), new, 0, new.len(), &mut chunks);
     chunks
 }
 
@@ -1487,10 +1480,7 @@ fn diff_chunks_range(
     mut new_end: usize,
     chunks: &mut Vec<DiffChunk>,
 ) {
-    while old_start < old_end
-        && new_start < new_end
-        && old[old_start].text == new[new_start].text
-    {
+    while old_start < old_end && new_start < new_end && old[old_start].text == new[new_start].text {
         old_start += 1;
         new_start += 1;
     }
@@ -1522,13 +1512,7 @@ fn diff_chunks_range(
             find_common_anchor(old, old_start, old_end, new, new_start, new_end)
         {
             diff_chunks_range(
-                old,
-                old_start,
-                old_anchor,
-                new,
-                new_start,
-                new_anchor,
-                chunks,
+                old, old_start, old_anchor, new, new_start, new_anchor, chunks,
             );
             diff_chunks_range(
                 old,
@@ -1558,8 +1542,7 @@ fn diff_chunks_range(
             lcs[slot] = if old[old_start + old_index].text == new[new_start + new_index].text {
                 1 + lcs[(old_index + 1) * width + new_index + 1]
             } else {
-                lcs[(old_index + 1) * width + new_index]
-                    .max(lcs[old_index * width + new_index + 1])
+                lcs[(old_index + 1) * width + new_index].max(lcs[old_index * width + new_index + 1])
             };
         }
     }
@@ -1584,12 +1567,7 @@ fn diff_chunks_range(
 
     while old_index < old_len && new_index < new_len {
         if old[old_start + old_index].text == new[new_start + new_index].text {
-            flush(
-                chunks,
-                &mut chunk_start,
-                old_index,
-                new_index,
-            );
+            flush(chunks, &mut chunk_start, old_index, new_index);
             old_index += 1;
             new_index += 1;
         } else {
@@ -1608,12 +1586,7 @@ fn diff_chunks_range(
         old_index = old_len;
         new_index = new_len;
     }
-    flush(
-        chunks,
-        &mut chunk_start,
-        old_index,
-        new_index,
-    );
+    flush(chunks, &mut chunk_start, old_index, new_index);
 }
 
 fn find_common_anchor(
@@ -1654,8 +1627,7 @@ fn find_common_anchor(
             let relative_distance = (*old_index - old_start)
                 .saturating_mul(new_len)
                 .abs_diff((*new_index - new_start).saturating_mul(old_len));
-            let midpoint_distance =
-                (*old_index).abs_diff(old_mid) + (*new_index).abs_diff(new_mid);
+            let midpoint_distance = (*old_index).abs_diff(old_mid) + (*new_index).abs_diff(new_mid);
             Some((
                 (
                     frequency,
@@ -1731,12 +1703,7 @@ fn intersects_semantic_preservation_zone(
 ) -> bool {
     collect_preservation_zones(parsed.tree().root_node(), source.text())
         .into_iter()
-        .filter(|zone| {
-            !matches!(
-                zone.reason,
-                PreservationReason::Comment
-            )
-        })
+        .filter(|zone| !matches!(zone.reason, PreservationReason::Comment))
         .any(|zone| range_overlaps_or_touches(range, zone.range))
 }
 
@@ -1771,12 +1738,7 @@ fn collect_syntax_fingerprint(
     fingerprint.push(")".to_owned());
 }
 
-fn line_slice_range(
-    lines: &[LineInfo],
-    start: usize,
-    end: usize,
-    source_len: usize,
-) -> ByteRange {
+fn line_slice_range(lines: &[LineInfo], start: usize, end: usize, source_len: usize) -> ByteRange {
     if start == end {
         let point = lines.get(start).map_or(source_len, |line| line.start);
         return ByteRange::new(point, point);
@@ -1822,10 +1784,11 @@ fn line_indices_to_single_line_ranges(
 }
 
 fn diagnostics_overlap_ranges(parsed: &ParseResult, ranges: &[ByteRange]) -> bool {
-    parsed
-        .diagnostics()
-        .iter()
-        .any(|diagnostic| ranges.iter().any(|range| range_overlaps_or_touches(diagnostic.range, *range)))
+    parsed.diagnostics().iter().any(|diagnostic| {
+        ranges
+            .iter()
+            .any(|range| range_overlaps_or_touches(diagnostic.range, *range))
+    })
 }
 
 fn recovery_ranges(parsed: &ParseResult, changed_ranges: &[ByteRange]) -> Vec<ByteRange> {
@@ -1925,10 +1888,7 @@ fn marker_visibility(lines: &[LineInfo]) -> Vec<bool> {
     visible
 }
 
-fn sections_touched(
-    sections: &[SectionInfo],
-    changed_lines: &BTreeSet<usize>,
-) -> BTreeSet<usize> {
+fn sections_touched(sections: &[SectionInfo], changed_lines: &BTreeSet<usize>) -> BTreeSet<usize> {
     sections
         .iter()
         .enumerate()
@@ -2139,11 +2099,8 @@ fn evaluate_risks(
 ) -> Result<(), DiffError> {
     let mut matched = BTreeMap::<String, DiffDecision>::new();
     for risk in risks {
-        let path_matcher = PathMatcher::new(
-            root,
-            &risk.paths,
-            &format!("diff.risk {:?}", risk.id),
-        )?;
+        let path_matcher =
+            PathMatcher::new(root, &risk.paths, &format!("diff.risk {:?}", risk.id))?;
         let kinds = risk_fact_kinds(risk);
         let is_match = files.iter().flat_map(|file| &file.facts).any(|fact| {
             kinds.contains(&fact.kind)
@@ -2269,14 +2226,8 @@ fn selected_path_matches(changed: &ChangedFile, matcher: &PathMatcher) -> bool {
 }
 
 fn changed_has_matlab_path(changed: &ChangedFile) -> bool {
-    changed
-        .old_path
-        .as_deref()
-        .is_some_and(is_matlab_path)
-        || changed
-            .new_path
-            .as_deref()
-            .is_some_and(is_matlab_path)
+    changed.old_path.as_deref().is_some_and(is_matlab_path)
+        || changed.new_path.as_deref().is_some_and(is_matlab_path)
 }
 
 fn is_matlab_path(path: &Path) -> bool {
@@ -2486,10 +2437,7 @@ mod tests {
 
     #[test]
     fn unrelated_parse_recovery_does_not_disable_formatting_equivalence() {
-        let analysis = analyze_replacement(
-            "x = 1 + ;\ny=1;\n",
-            "x = 1 + ;\ny = 1;\n",
-        );
+        let analysis = analyze_replacement("x = 1 + ;\ny=1;\n", "x = 1 + ;\ny = 1;\n");
         assert_eq!(analysis.metrics.added_executable_lines, 0);
         assert_eq!(analysis.metrics.deleted_executable_lines, 0);
         assert_eq!(analysis.files[0].parse_confidence, ParseConfidence::Full);
@@ -2498,10 +2446,7 @@ mod tests {
 
     #[test]
     fn mixed_formatting_and_semantic_chunk_counts_only_semantic_line() {
-        let analysis = analyze_replacement(
-            "a=1;\nb=2;\n",
-            "a = 1;\nb=3;\n",
-        );
+        let analysis = analyze_replacement("a=1;\nb=2;\n", "a = 1;\nb=3;\n");
         assert_eq!(analysis.metrics.added_executable_lines, 1);
         assert_eq!(analysis.metrics.deleted_executable_lines, 1);
     }
@@ -2541,12 +2486,18 @@ mod tests {
     #[test]
     fn fact_cancellation_preserves_operand_order_changes() {
         let analysis = analyze_replacement("x = a - b;\n", "x = b - a;\n");
-        assert!(analysis.files[0].facts.iter().any(|fact| {
-            fact.kind == SemanticFactKind::AssignmentChanged
-        }));
-        assert!(analysis.files[0].facts.iter().any(|fact| {
-            fact.kind == SemanticFactKind::NumericExpressionChanged
-        }));
+        assert!(
+            analysis.files[0]
+                .facts
+                .iter()
+                .any(|fact| { fact.kind == SemanticFactKind::AssignmentChanged })
+        );
+        assert!(
+            analysis.files[0]
+                .facts
+                .iter()
+                .any(|fact| { fact.kind == SemanticFactKind::NumericExpressionChanged })
+        );
     }
 
     #[test]

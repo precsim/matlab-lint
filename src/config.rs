@@ -1,8 +1,8 @@
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::BTreeSet;
 
 use serde::Deserialize;
 
@@ -198,7 +198,9 @@ impl Default for DiffConfig {
 
 impl DiffConfig {
     fn validate(&self) -> Result<(), ConfigError> {
-        self.thresholds.general.validate("diff.thresholds.general")?;
+        self.thresholds
+            .general
+            .validate("diff.thresholds.general")?;
         let mut profile_names = BTreeSet::new();
         for profile in &self.thresholds.profile {
             if profile.name.trim().is_empty() {
@@ -634,6 +636,10 @@ mod tests {
         )
         .expect_err("profile names must be unique");
 
-        assert!(error.to_string().contains("duplicate diff threshold profile"));
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate diff threshold profile")
+        );
     }
 }
