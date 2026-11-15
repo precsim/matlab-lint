@@ -2156,10 +2156,7 @@ fn risk_context_matches(risk: &DiffRiskConfig, fact: &SemanticFact) -> bool {
     selector_matches(&risk.identifiers, &fact.identifiers)
         && selector_matches(&risk.targets, &fact.call_or_index_targets)
         && selector_matches(&risk.field_paths, &fact.field_paths)
-        && selector_matches(
-            &risk.functions,
-            fact.enclosing_function.as_slice(),
-        )
+        && selector_matches(&risk.functions, fact.enclosing_function.as_slice())
         && selector_matches(&risk.operators, &fact.operators)
         && selector_matches(&risk.literals, &fact.literals)
 }
