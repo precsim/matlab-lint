@@ -592,10 +592,15 @@ fn fossil_baseline_sources(
         }
         quoted_paths.push(format!("'{}'", text.replace('\'', "''")));
     }
-    let checkout_sql = checkout.replace('\'', "''");
+    // `vfile` retains deleted entries and the pre-rename path, while `rid`
+    // identifies the file content from the checkout baseline.
     let query = format!(
-        "SELECT filename, length(content(uuid)) FROM files_of_checkin('{checkout_sql}') \
-         WHERE filename IN ({}) ORDER BY filename;",
+        "SELECT COALESCE(v.origname, v.pathname) AS old_path, b.size \
+         FROM vfile AS v JOIN blob AS b ON b.rid = v.rid \
+         WHERE v.vid = (SELECT CAST(value AS INTEGER) FROM vvar WHERE name = 'checkout') \
+         AND v.rid > 0 \
+         AND COALESCE(v.origname, v.pathname) IN ({}) \
+         ORDER BY old_path;",
         quoted_paths.join(",")
     );
     let output = run_fossil(
