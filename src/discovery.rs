@@ -596,8 +596,8 @@ fn fossil_baseline_sources(
     // identifies the file content from the checkout baseline.
     let query = format!(
         "SELECT COALESCE(v.origname, v.pathname) AS old_path, b.size \
-         FROM vfile AS v JOIN blob AS b ON b.rid = v.rid \
-         WHERE v.vid = (SELECT CAST(value AS INTEGER) FROM vvar WHERE name = 'checkout') \
+         FROM localdb.vfile AS v JOIN repository.blob AS b ON b.rid = v.rid \
+         WHERE v.vid = (SELECT CAST(value AS INTEGER) FROM localdb.vvar WHERE name = 'checkout') \
          AND v.rid > 0 \
          AND COALESCE(v.origname, v.pathname) IN ({}) \
          ORDER BY old_path;",
@@ -610,6 +610,7 @@ fn fossil_baseline_sources(
             "--readonly",
             "-batch",
             "-noheader",
+            "-list",
             "-separator",
             "\t",
             &query,
@@ -630,28 +631,9 @@ fn fossil_baseline_sources(
 
     for path in paths {
         if !entries.iter().any(|(entry, _)| entry == path) {
-            let diagnostic = run_fossil(
-                root,
-                &[
-                    "sql",
-                    "--readonly",
-                    "-batch",
-                    "-noheader",
-                    "SELECT printf('checkout=%s', value) FROM localdb.vvar WHERE name='checkout'; \
-                     SELECT printf('vfile=%d|%d|%d|%d|%s|%s', vid, deleted, rid, mrid, \
-                         pathname, coalesce(origname, '<null>')) \
-                     FROM localdb.vfile \
-                     WHERE deleted OR chnged OR rid=0 OR origname IS NOT NULL \
-                     ORDER BY pathname;",
-                ],
-            )
-            .ok()
-            .and_then(|bytes| String::from_utf8(bytes).ok())
-            .map(|text| text.trim().to_owned())
-            .unwrap_or_else(|| "<unavailable>".to_owned());
             return Err(DiscoveryError::Fossil(format!(
-                "baseline source not found for {}; checkout metadata: {diagnostic}",
-                path.display(),
+                "baseline source not found for {}",
+                path.display()
             )));
         }
     }
