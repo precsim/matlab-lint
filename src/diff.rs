@@ -1585,7 +1585,7 @@ fn diff_chunks_range(
     while old_index < old_len && new_index < new_len {
         if old[old_start + old_index].text == new[new_start + new_index].text {
             flush(
-                &mut chunks,
+                chunks,
                 &mut chunk_start,
                 old_index,
                 new_index,
@@ -1609,7 +1609,7 @@ fn diff_chunks_range(
         new_index = new_len;
     }
     flush(
-        &mut chunks,
+        chunks,
         &mut chunk_start,
         old_index,
         new_index,
@@ -1649,13 +1649,13 @@ fn find_common_anchor(
     old_lines
         .iter()
         .filter_map(|(text, (old_count, old_index))| {
-            let (new_count, new_index) = new_lines.get(text)?;
-            let frequency = old_count.saturating_mul(*new_count);
+            let (new_count, new_index) = new_lines.get(*text)?;
+            let frequency = (*old_count).saturating_mul(*new_count);
             let relative_distance = (*old_index - old_start)
                 .saturating_mul(new_len)
                 .abs_diff((*new_index - new_start).saturating_mul(old_len));
             let midpoint_distance =
-                old_index.abs_diff(old_mid) + new_index.abs_diff(new_mid);
+                (*old_index).abs_diff(old_mid) + (*new_index).abs_diff(new_mid);
             Some((
                 (
                     frequency,
