@@ -8,7 +8,7 @@ Usage: install.sh [--version TAG|latest] [--install-dir DIR] [--dry-run]
 Downloads and verifies a released mstyle binary.
 
 Environment overrides:
-  MSTYLE_VERSION      Release tag such as v0.1.0, or latest
+  MSTYLE_VERSION      Release tag such as vX.Y.Z, or latest
   MSTYLE_INSTALL_DIR  Installation directory
 EOF
 }
@@ -86,7 +86,7 @@ case "$version" in
     base_url="https://github.com/precsim/matlab-lint/releases/download/$version"
     ;;
   *)
-    echo "install.sh: --version must be 'latest' or a release tag such as v0.1.0" >&2
+    echo "install.sh: --version must be 'latest' or a release tag such as vX.Y.Z" >&2
     exit 2
     ;;
 esac

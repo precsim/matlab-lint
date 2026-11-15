@@ -38,7 +38,7 @@ if ($Version -eq "latest") {
 } elseif ($Version.StartsWith("v", [System.StringComparison]::Ordinal)) {
     $baseUrl = "https://github.com/precsim/matlab-lint/releases/download/$Version"
 } else {
-    throw "-Version must be 'latest' or a release tag such as v0.1.0"
+    throw "-Version must be 'latest' or a release tag such as vX.Y.Z"
 }
 
 $url = "$baseUrl/$asset"
