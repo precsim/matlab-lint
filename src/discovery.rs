@@ -635,11 +635,11 @@ fn fossil_baseline_sources(
 }
 
 fn decode_hex(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err("fossil sql returned odd-length hex content".to_owned());
     }
     let mut bytes = Vec::with_capacity(hex.len() / 2);
-    for pair in hex.as_bytes().chunks_exact(2) {
+    for pair in hex.as_bytes().as_chunks::<2>().0 {
         let high = hex_nibble(pair[0])
             .ok_or_else(|| "fossil sql returned invalid hex content".to_owned())?;
         let low = hex_nibble(pair[1])

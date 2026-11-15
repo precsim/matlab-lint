@@ -421,6 +421,7 @@ pub fn analyze_diff(
     })
 }
 
+#[allow(clippy::collapsible_if)]
 fn analyze_file(
     changed: &ChangedFile,
     classification: FileClass,
@@ -957,6 +958,7 @@ fn first_function_file_primary_start(root: Node<'_>) -> Option<usize> {
         .map(|child| child.start_byte())
 }
 
+#[allow(clippy::collapsible_if)]
 fn function_owner_chain(mut node: Node<'_>, source: &SourceFile) -> Result<Vec<String>, DiffError> {
     let mut owners = Vec::new();
     while let Some(parent) = node.parent() {
@@ -1070,6 +1072,7 @@ fn function_fact(
     })
 }
 
+#[allow(clippy::collapsible_if, clippy::too_many_arguments)]
 fn collect_changed_syntax_facts(
     source: &SourceFile,
     node: Node<'_>,
@@ -1156,6 +1159,7 @@ fn control_flow_header_range(node: Node<'_>) -> ByteRange {
     ByteRange::new(node.start_byte(), end)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_syntax_fact(
     kind: SemanticFactKind,
     change: ChangeKind,
@@ -1204,6 +1208,7 @@ fn make_syntax_fact(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_context(
     node: Node<'_>,
     source: &SourceFile,
@@ -1665,6 +1670,7 @@ fn executable_line_flags(lines: &[LineInfo]) -> Vec<bool> {
     flags
 }
 
+#[allow(clippy::too_many_arguments)]
 fn replacement_is_syntax_equivalent(
     old_source: &SourceFile,
     old_parsed: &ParseResult,
@@ -2152,10 +2158,7 @@ fn risk_context_matches(risk: &DiffRiskConfig, fact: &SemanticFact) -> bool {
         && selector_matches(&risk.field_paths, &fact.field_paths)
         && selector_matches(
             &risk.functions,
-            fact.enclosing_function
-                .as_ref()
-                .map(std::slice::from_ref)
-                .unwrap_or(&[]),
+            fact.enclosing_function.as_slice(),
         )
         && selector_matches(&risk.operators, &fact.operators)
         && selector_matches(&risk.literals, &fact.literals)
