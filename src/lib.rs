@@ -1,6 +1,7 @@
 pub mod ambiguity;
 pub mod config;
 pub mod diagnostic;
+pub mod diff;
 pub mod discovery;
 pub mod edit;
 pub mod formatter;

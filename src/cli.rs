@@ -72,12 +72,29 @@ pub enum Command {
         #[arg(long, value_enum, default_value = "text")]
         format: OutputFormat,
     },
+
+    /// Analyze the current MATLAB working-tree diff and evaluate diff policy.
+    DiffCheck {
+        /// Diagnostic/report output format.
+        #[arg(long, value_enum, default_value = "text")]
+        format: OutputFormat,
+
+        /// Override repository VCS autodetection/configuration.
+        #[arg(long, value_enum)]
+        vcs: Option<VcsOverride>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
     Text,
     Json,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum VcsOverride {
+    Git,
+    Fossil,
 }
 
 #[cfg(test)]
@@ -195,5 +212,26 @@ mod tests {
     fn rejects_fmt_stdin_with_paths_or_check() {
         assert!(Cli::try_parse_from(["mstyle", "fmt", "--stdin", "file.m"]).is_err());
         assert!(Cli::try_parse_from(["mstyle", "fmt", "--stdin", "--check"]).is_err());
+    }
+
+    #[test]
+    fn parses_diff_check_json_with_vcs_override() {
+        let cli = Cli::try_parse_from([
+            "mstyle",
+            "diff-check",
+            "--format",
+            "json",
+            "--vcs",
+            "fossil",
+        ])
+        .expect("CLI should parse");
+
+        match cli.command {
+            Command::DiffCheck { format, vcs } => {
+                assert_eq!(format, OutputFormat::Json);
+                assert_eq!(vcs, Some(VcsOverride::Fossil));
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
     }
 }

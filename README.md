@@ -78,6 +78,7 @@ mstyle --help
 mstyle check --help
 mstyle fmt --help
 mstyle lint --help
+mstyle diff-check --help
 ```
 
 ### Top-level usage
@@ -93,6 +94,7 @@ Commands:
 | `check` | Check formatting and lint diagnostics without modifying files |
 | `fmt` | Format MATLAB/Octave source |
 | `lint` | Run lint diagnostics without modifying files |
+| `diff-check` | Analyze the current MATLAB working-tree diff and evaluate diff policy |
 
 Global options:
 
@@ -182,6 +184,31 @@ mstyle lint src/
 mstyle lint --format json src/
 ```
 
+### `mstyle diff-check`
+
+```text
+mstyle diff-check [OPTIONS]
+```
+
+Analyzes the current working tree against its checkout baseline. It reads only changed `.m` files, reports raw executable and structural metrics, emits generic syntax facts, and evaluates configured diff policy without modifying files.
+
+Git uses `HEAD` as the baseline and includes staged, unstaged, renamed, deleted, and non-ignored untracked MATLAB files. Fossil uses the current checkout baseline and includes managed changes plus unmanaged MATLAB files from `fossil extras`.
+
+| Option | Meaning |
+| --- | --- |
+| `--format <text|json>` | Report format; default: `text` |
+| `--vcs <git|fossil>` | Override VCS autodetection |
+
+Examples:
+
+```bash
+mstyle diff-check
+mstyle diff-check --format json
+mstyle diff-check --vcs fossil
+```
+
+Comment-only, blank-only, and syntax-proven formatting-only replacements contribute zero executable churn. Formatting equivalence is conservative around MATLAB constructs where whitespace can affect semantics. Parser recovery that overlaps changed executable source raises the result to at least `REVIEW`.
+
 ## Changed-file CI
 
 For local work, check only staged, unstaged, and untracked MATLAB files:
@@ -221,6 +248,30 @@ F010 = "warning"
 
 [exclude]
 paths = ["vendor/**", "generated/**"]
+
+[diff]
+vcs = "auto"
+advisory = true
+generated_paths = ["generated/**"]
+test_paths = ["tests/**"]
+public_api_inventory = "api-files.txt"
+public_api_root = "src"
+
+[diff.thresholds.general]
+added_lines = { review = 101, reject = 201 }
+files_touched = { review = 4, reject = 7 }
+
+[[diff.thresholds.profile]]
+name = "sensitive"
+paths = ["src/numerics/**"]
+functions_touched = { review = 4, reject = 11 }
+
+[[diff.risk]]
+id = "DYNAMIC_EVALUATION_CHANGE"
+severity = "review"
+facts = ["call_or_index_changed"]
+targets = ["eval", "evalin", "feval"]
+match = "context"
 ```
 
 Unknown configuration keys and unknown rule IDs are rejected.
@@ -261,9 +312,11 @@ Diagnostics include stable rule IDs, severity, file, 1-based line/column spans, 
 
 ## Exit codes
 
-- `0`: no diagnostics or formatting violations.
-- `1`: source diagnostics, lint findings, formatting violations, or parse errors.
-- `2`: configuration, I/O, Git integration, or internal tool failure.
+- `0`: no diagnostics or violations, or a `diff-check` policy finding is advisory.
+- `1`: source diagnostics, lint findings, formatting violations, parse errors, or enforced `diff-check` REVIEW/REJECT-SPLIT.
+- `2`: configuration, I/O, VCS integration, parser infrastructure, or internal tool failure.
+
+`diff-check` always emits its policy decision (`ACCEPT`, `REVIEW`, or `REJECT / SPLIT`) separately from the process exit code.
 
 ## Safety model
 
@@ -298,6 +351,7 @@ For performance measurement:
 
 ```bash
 cargo run --locked --release --example benchmark
+python3 scripts/benchmark-diff-check.py
 ```
 
 See [docs/benchmark.md](docs/benchmark.md) and [docs/releasing.md](docs/releasing.md) for details.

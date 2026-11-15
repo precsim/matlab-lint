@@ -16,6 +16,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fossil octave
+
       - name: Rust format
         run: cargo fmt --all -- --check
 
@@ -55,10 +60,8 @@ jobs:
       - name: Benchmark smoke
         run: MSTYLE_BENCH_ITERS=10 cargo run --locked --release --example benchmark
 
-      - name: Install Octave
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y octave
+      - name: Diff-check performance
+        run: python3 scripts/benchmark-diff-check.py
 
       - name: Octave tests
         run: |
