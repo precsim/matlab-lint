@@ -50,7 +50,6 @@ fn write_base_files(root: &Path) {
     fs::write(root.join("old.m"), "y = 1;\n").expect("rename base");
     fs::write(root.join("deleted.m"), "z = 1;\n").expect("delete base");
     fs::write(root.join("ignored.txt"), "not matlab\n").expect("non-matlab base");
-    fs::write(root.join("ignored.bin"), [0xff, 0x00, 0xfe]).expect("binary base");
     fs::write(root.join("to_text.m"), "to_text = 1;\n").expect("m-to-text base");
     fs::write(root.join("to_matlab.txt"), "to_matlab = 1;\n").expect("text-to-m base");
 }
@@ -60,7 +59,6 @@ fn make_working_changes(root: &Path) {
     fs::write(root.join("added.m"), "a = 1;\n").expect("managed add");
     fs::write(root.join("unmanaged.m"), "u = 1;\n").expect("unmanaged add");
     fs::write(root.join("ignored.txt"), "still not matlab\n").expect("non-matlab edit");
-    fs::write(root.join("ignored.bin"), [0xfe, 0x00, 0xff]).expect("binary edit");
 }
 
 fn git_workspace() -> (PathBuf, Vec<ChangedFile>) {
@@ -73,10 +71,12 @@ fn git_workspace() -> (PathBuf, Vec<ChangedFile>) {
     );
     run(&root, "git", &["config", "user.name", "mstyle test"]);
     write_base_files(&root);
+    fs::write(root.join("ignored.bin"), [0xff, 0x00, 0xfe]).expect("binary base");
     run(&root, "git", &["add", "."]);
     run(&root, "git", &["commit", "-qm", "base"]);
 
     make_working_changes(&root);
+    fs::write(root.join("ignored.bin"), [0xfe, 0x00, 0xff]).expect("binary edit");
     run(&root, "git", &["add", "added.m"]);
     run(&root, "git", &["mv", "old.m", "renamed.m"]);
     run(&root, "git", &["mv", "to_text.m", "to_text.txt"]);

@@ -163,6 +163,46 @@ fn changed_recovery_forces_review_but_unrelated_recovery_does_not() {
 }
 
 #[test]
+fn recovered_region_does_not_hide_clean_structural_metrics_elsewhere() {
+    let analysis = analyze_diff(
+        &workspace(vec![modified(
+            "mixed_recovery.m",
+            concat!(
+                "function y = broken(x)\n",
+                "  y = x;\n",
+                "end\n",
+                "function z = clean(x)\n",
+                "  z = x;\n",
+                "end\n",
+            ),
+            concat!(
+                "function y = broken(x)\n",
+                "  y = x + ;\n",
+                "end\n",
+                "function z = clean(x)\n",
+                "  if x > 0\n",
+                "    z = x;\n",
+                "  else\n",
+                "    z = 0;\n",
+                "  end\n",
+                "end\n",
+            ),
+        )]),
+        &DiffConfig::default(),
+    )
+    .expect("analyze");
+
+    assert_eq!(analysis.files[0].parse_confidence, ParseConfidence::Recovered);
+    assert_eq!(analysis.decision, DiffDecision::Review);
+    assert_eq!(analysis.metrics.functions_touched, 1);
+    assert_eq!(analysis.metrics.control_flow_increase, 1);
+    assert!(analysis.files[0].functions.iter().any(|function| {
+        function.name == "clean"
+            && function.change == mstyle::diff::FunctionChangeKind::Touched
+    }));
+}
+
+#[test]
 fn zero_width_missing_at_changed_boundary_forces_review() {
     let analysis = analyze_diff(
         &workspace(vec![modified(

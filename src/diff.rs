@@ -455,6 +455,46 @@ fn analyze_file(
     let old_lines = line_table(old_file.as_ref().map_or("", SourceFile::text));
     let new_lines = line_table(new_file.as_ref().map_or("", SourceFile::text));
     let chunks = diff_chunks(&old_lines, &new_lines);
+    let mut old_line_equivalence_candidates = BTreeSet::new();
+    let mut new_line_equivalence_candidates = BTreeSet::new();
+    for chunk in &chunks {
+        let old_len = chunk.old_end - chunk.old_start;
+        let new_len = chunk.new_end - chunk.new_start;
+        if old_len > 0
+            && new_len > 0
+            && (old_len > 1 || new_len > 1)
+            && old_len.saturating_mul(new_len) <= LCS_CELL_LIMIT
+        {
+            old_line_equivalence_candidates.extend(chunk.old_start..chunk.old_end);
+            new_line_equivalence_candidates.extend(chunk.new_start..chunk.new_end);
+        }
+    }
+    let old_line_equivalence_keys = old_file
+        .as_ref()
+        .zip(old_parse.as_ref())
+        .map(|(source, parsed)| {
+            line_equivalence_keys(
+                source,
+                parsed,
+                &old_lines,
+                &old_line_equivalence_candidates,
+            )
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let new_line_equivalence_keys = new_file
+        .as_ref()
+        .zip(new_parse.as_ref())
+        .map(|(source, parsed)| {
+            line_equivalence_keys(
+                source,
+                parsed,
+                &new_lines,
+                &new_line_equivalence_candidates,
+            )
+        })
+        .transpose()?
+        .unwrap_or_default();
     let old_executable = executable_line_flags(&old_lines);
     let new_executable = executable_line_flags(&new_lines);
     let mut old_changed_all = BTreeSet::new();
@@ -466,38 +506,44 @@ fn analyze_file(
         old_changed_all.extend(chunk.old_start..chunk.old_end);
         new_changed_all.extend(chunk.new_start..chunk.new_end);
 
-        for refined in formatting_equivalence_chunks(*chunk) {
-            let formatting_only = old_file
-                .as_ref()
-                .zip(old_parse.as_ref())
-                .zip(new_file.as_ref().zip(new_parse.as_ref()))
-                .is_some_and(|((old_source, old_parsed), (new_source, new_parsed))| {
-                    replacement_is_syntax_equivalent(
-                        old_source,
-                        old_parsed,
-                        &old_lines,
-                        refined.old_start,
-                        refined.old_end,
-                        new_source,
-                        new_parsed,
-                        &new_lines,
-                        refined.new_start,
-                        refined.new_end,
-                    )
-                });
-            if formatting_only {
-                continue;
-            }
+        let formatting_pairs = old_file
+            .as_ref()
+            .zip(old_parse.as_ref())
+            .zip(new_file.as_ref().zip(new_parse.as_ref()))
+            .map_or_else(Vec::new, |((old_source, old_parsed), (new_source, new_parsed))| {
+                syntax_equivalent_line_pairs(
+                    *chunk,
+                    old_source,
+                    old_parsed,
+                    &old_lines,
+                    &old_line_equivalence_keys,
+                    new_source,
+                    new_parsed,
+                    &new_lines,
+                    &new_line_equivalence_keys,
+                )
+            });
+        let formatting_old = formatting_pairs
+            .iter()
+            .map(|(old_index, _)| *old_index)
+            .collect::<BTreeSet<_>>();
+        let formatting_new = formatting_pairs
+            .iter()
+            .map(|(_, new_index)| *new_index)
+            .collect::<BTreeSet<_>>();
 
-            for index in refined.old_start..refined.old_end {
-                if old_executable.get(index).copied().unwrap_or(false) {
-                    old_changed_exec.insert(index);
-                }
+        for index in chunk.old_start..chunk.old_end {
+            if !formatting_old.contains(&index)
+                && old_executable.get(index).copied().unwrap_or(false)
+            {
+                old_changed_exec.insert(index);
             }
-            for index in refined.new_start..refined.new_end {
-                if new_executable.get(index).copied().unwrap_or(false) {
-                    new_changed_exec.insert(index);
-                }
+        }
+        for index in chunk.new_start..chunk.new_end {
+            if !formatting_new.contains(&index)
+                && new_executable.get(index).copied().unwrap_or(false)
+            {
+                new_changed_exec.insert(index);
             }
         }
     }
@@ -533,6 +579,53 @@ fn analyze_file(
         .unwrap_or_default();
     let old_recovery = !old_unsafe_ranges.is_empty();
     let new_recovery = !new_unsafe_ranges.is_empty();
+    let mut old_structural_unsafe_ranges = old_unsafe_ranges.clone();
+    let mut new_structural_unsafe_ranges = new_unsafe_ranges.clone();
+    for chunk in &chunks {
+        let old_chunk_range = (chunk.old_start < chunk.old_end).then(|| {
+            line_slice_range(
+                &old_lines,
+                chunk.old_start,
+                chunk.old_end,
+                old_file.as_ref().map_or(0, SourceFile::len),
+            )
+        });
+        let new_chunk_range = (chunk.new_start < chunk.new_end).then(|| {
+            line_slice_range(
+                &new_lines,
+                chunk.new_start,
+                chunk.new_end,
+                new_file.as_ref().map_or(0, SourceFile::len),
+            )
+        });
+        let chunk_has_recovery = old_chunk_range
+            .is_some_and(|range| ranges_overlap_any(range, &old_unsafe_ranges))
+            || new_chunk_range.is_some_and(|range| ranges_overlap_any(range, &new_unsafe_ranges));
+        if !chunk_has_recovery {
+            continue;
+        }
+
+        if let Some(range) = old_chunk_range {
+            old_structural_unsafe_ranges.extend(
+                old_exec_line_ranges
+                    .iter()
+                    .copied()
+                    .filter(|changed| range_overlaps_or_touches(range, *changed)),
+            );
+        }
+        if let Some(range) = new_chunk_range {
+            new_structural_unsafe_ranges.extend(
+                new_exec_line_ranges
+                    .iter()
+                    .copied()
+                    .filter(|changed| range_overlaps_or_touches(range, *changed)),
+            );
+        }
+    }
+    old_structural_unsafe_ranges.sort();
+    old_structural_unsafe_ranges.dedup();
+    new_structural_unsafe_ranges.sort();
+    new_structural_unsafe_ranges.dedup();
     let parse_confidence = if old_file.is_none() && new_file.is_none() {
         ParseConfidence::Unavailable
     } else if old_recovery || new_recovery {
@@ -563,18 +656,51 @@ fn analyze_file(
         .map(|function| (function.key.clone(), function))
         .collect::<BTreeMap<_, _>>();
 
+    let old_safe_exec_line_ranges = old_exec_line_ranges
+        .iter()
+        .copied()
+        .filter(|range| !ranges_overlap_any(*range, &old_structural_unsafe_ranges))
+        .collect::<Vec<_>>();
+    let new_safe_exec_line_ranges = new_exec_line_ranges
+        .iter()
+        .copied()
+        .filter(|range| !ranges_overlap_any(*range, &new_structural_unsafe_ranges))
+        .collect::<Vec<_>>();
+
     let mut touched_keys = BTreeSet::new();
-    collect_smallest_touched_functions(&old_functions, &old_exec_line_ranges, &mut touched_keys);
-    collect_smallest_touched_functions(&new_functions, &new_exec_line_ranges, &mut touched_keys);
+    collect_smallest_touched_functions(
+        &old_functions,
+        &old_safe_exec_line_ranges,
+        &mut touched_keys,
+    );
+    collect_smallest_touched_functions(
+        &new_functions,
+        &new_safe_exec_line_ranges,
+        &mut touched_keys,
+    );
 
     let added_keys = new_function_map
         .keys()
-        .filter(|key| !old_function_map.contains_key(*key))
+        .filter(|key| {
+            !old_function_map.contains_key(*key)
+                && new_function_map
+                    .get(*key)
+                    .is_some_and(|function| {
+                        !ranges_overlap_any(function.range, &new_structural_unsafe_ranges)
+                    })
+        })
         .cloned()
         .collect::<BTreeSet<_>>();
     let deleted_keys = old_function_map
         .keys()
-        .filter(|key| !new_function_map.contains_key(*key))
+        .filter(|key| {
+            !new_function_map.contains_key(*key)
+                && old_function_map
+                    .get(*key)
+                    .is_some_and(|function| {
+                        !ranges_overlap_any(function.range, &old_structural_unsafe_ranges)
+                    })
+        })
         .cloned()
         .collect::<BTreeSet<_>>();
     let signature_changed_keys = old_function_map
@@ -582,7 +708,17 @@ fn analyze_file(
         .filter_map(|(key, old)| {
             new_function_map
                 .get(key)
-                .filter(|new| new.signature_fingerprint != old.signature_fingerprint)
+                .filter(|new| {
+                    new.signature_fingerprint != old.signature_fingerprint
+                        && !ranges_overlap_any(
+                            old.signature_range,
+                            &old_structural_unsafe_ranges,
+                        )
+                        && !ranges_overlap_any(
+                            new.signature_range,
+                            &new_structural_unsafe_ranges,
+                        )
+                })
                 .map(|_| key.clone())
         })
         .collect::<BTreeSet<_>>();
@@ -604,36 +740,27 @@ fn analyze_file(
         .len()
         .max(sections_touched(&new_embedded_tests, &new_changed_all).len());
 
-    let structural_metrics_available = parse_confidence != ParseConfidence::Recovered;
-    let old_control_flow = if structural_metrics_available {
-        old_parse.as_ref().map_or(0, |parsed| {
-            count_control_flow_in_ranges(parsed.tree().root_node(), &old_exec_ranges)
-        })
-    } else {
-        0
-    };
-    let new_control_flow = if structural_metrics_available {
-        new_parse.as_ref().map_or(0, |parsed| {
-            count_control_flow_in_ranges(parsed.tree().root_node(), &new_exec_ranges)
-        })
-    } else {
-        0
-    };
+    let old_control_flow = old_parse.as_ref().map_or(0, |parsed| {
+        count_control_flow_in_ranges(
+            parsed.tree().root_node(),
+            &old_exec_ranges,
+            &old_structural_unsafe_ranges,
+        )
+    });
+    let new_control_flow = new_parse.as_ref().map_or(0, |parsed| {
+        count_control_flow_in_ranges(
+            parsed.tree().root_node(),
+            &new_exec_ranges,
+            &new_structural_unsafe_ranges,
+        )
+    });
 
     let metrics = DiffMetrics {
         added_executable_lines: new_changed_exec.len(),
         deleted_executable_lines: old_changed_exec.len(),
         files_touched: 1,
-        functions_touched: if structural_metrics_available {
-            touched_keys.len()
-        } else {
-            0
-        },
-        functions_added: if structural_metrics_available {
-            added_keys.len()
-        } else {
-            0
-        },
+        functions_touched: touched_keys.len(),
+        functions_added: added_keys.len(),
         control_flow_increase: new_control_flow.saturating_sub(old_control_flow),
         sections_touched: sections_touched_count,
         sections_added: added_section_indices.len(),
@@ -695,7 +822,7 @@ fn analyze_file(
             source,
             parsed.tree().root_node(),
             &old_exec_ranges,
-            &old_unsafe_ranges,
+            &old_structural_unsafe_ranges,
             &old_functions,
             changed.kind,
             DiffSide::Old,
@@ -713,7 +840,7 @@ fn analyze_file(
             source,
             parsed.tree().root_node(),
             &new_exec_ranges,
-            &new_unsafe_ranges,
+            &new_structural_unsafe_ranges,
             &new_functions,
             changed.kind,
             DiffSide::New,
@@ -731,7 +858,7 @@ fn analyze_file(
         if let (Some(function), Some(source), Some(path)) =
             (new_function_map.get(key), new_file.as_ref(), new_path)
         {
-            if !ranges_overlap_any(function.range, &new_unsafe_ranges) {
+            if !ranges_overlap_any(function.range, &new_structural_unsafe_ranges) {
                 facts.push(function_fact(
                     SemanticFactKind::FunctionAdded,
                     changed.kind,
@@ -747,8 +874,15 @@ fn analyze_file(
         if let (Some(primary), Some(source), Some(path)) =
             (new_primary, new_file.as_ref(), new_path)
         {
-            if !signature_changed_keys.contains(&primary.key)
-                && !ranges_overlap_any(primary.signature_range, &new_unsafe_ranges)
+            let old_primary_unsafe = old_primary.is_some_and(|old_primary| {
+                ranges_overlap_any(
+                    old_primary.signature_range,
+                    &old_structural_unsafe_ranges,
+                )
+            });
+            if !old_primary_unsafe
+                && !signature_changed_keys.contains(&primary.key)
+                && !ranges_overlap_any(primary.signature_range, &new_structural_unsafe_ranges)
             {
                 facts.push(function_fact(
                     SemanticFactKind::FunctionSignatureChanged,
@@ -765,7 +899,7 @@ fn analyze_file(
         if let (Some(function), Some(source), Some(path)) =
             (old_function_map.get(key), old_file.as_ref(), old_path)
         {
-            if !ranges_overlap_any(function.range, &old_unsafe_ranges) {
+            if !ranges_overlap_any(function.range, &old_structural_unsafe_ranges) {
                 facts.push(function_fact(
                     SemanticFactKind::FunctionDeleted,
                     changed.kind,
@@ -781,7 +915,7 @@ fn analyze_file(
         if let (Some(function), Some(source), Some(path)) =
             (new_function_map.get(key), new_file.as_ref(), new_path)
         {
-            if !ranges_overlap_any(function.signature_range, &new_unsafe_ranges) {
+            if !ranges_overlap_any(function.signature_range, &new_structural_unsafe_ranges) {
                 facts.push(function_fact(
                     SemanticFactKind::FunctionSignatureChanged,
                     changed.kind,
@@ -806,10 +940,13 @@ fn analyze_file(
                 (new_primary, new_file.as_ref(), new_path)
             {
                 let old_primary_unsafe = old_primary.is_some_and(|old_primary| {
-                    ranges_overlap_any(old_primary.signature_range, &old_unsafe_ranges)
+                    ranges_overlap_any(
+                        old_primary.signature_range,
+                        &old_structural_unsafe_ranges,
+                    )
                 });
                 if !old_primary_unsafe
-                    && !ranges_overlap_any(primary.signature_range, &new_unsafe_ranges)
+                    && !ranges_overlap_any(primary.signature_range, &new_structural_unsafe_ranges)
                 {
                     facts.push(function_fact(
                         SemanticFactKind::PublicApiSignatureChanged,
@@ -1387,7 +1524,12 @@ fn is_operator_token(token: &str) -> bool {
     )
 }
 
-fn count_control_flow_in_ranges(node: Node<'_>, changed_ranges: &[ByteRange]) -> usize {
+fn count_control_flow_in_ranges(
+    node: Node<'_>,
+    changed_ranges: &[ByteRange],
+    unsafe_ranges: &[ByteRange],
+) -> usize {
+    let header_range = control_flow_header_range(node);
     let own = usize::from(
         matches!(
             node.kind(),
@@ -1398,12 +1540,13 @@ fn count_control_flow_in_ranges(node: Node<'_>, changed_ranges: &[ByteRange]) ->
                 | "case_clause"
                 | "catch_clause"
                 | "spmd_statement"
-        ) && ranges_overlap_any(control_flow_header_range(node), changed_ranges),
+        ) && ranges_overlap_any(header_range, changed_ranges)
+            && !ranges_overlap_any(header_range, unsafe_ranges),
     );
     let mut count = own;
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        count += count_control_flow_in_ranges(child, changed_ranges);
+        count += count_control_flow_in_ranges(child, changed_ranges, unsafe_ranges);
     }
     count
 }
@@ -1454,20 +1597,139 @@ struct DiffChunk {
     new_end: usize,
 }
 
-fn formatting_equivalence_chunks(chunk: DiffChunk) -> Vec<DiffChunk> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LineEquivalenceKey {
+    preservation: Vec<(PreservationReason, String)>,
+    syntax: Vec<String>,
+}
+
+fn line_equivalence_keys(
+    source: &SourceFile,
+    parsed: &ParseResult,
+    lines: &[LineInfo],
+    candidate_indices: &BTreeSet<usize>,
+) -> Result<Vec<Option<LineEquivalenceKey>>, DiffError> {
+    let zones = collect_preservation_zones(parsed.tree().root_node(), source.text())
+        .into_iter()
+        .filter(|zone| !matches!(zone.reason, PreservationReason::Comment))
+        .collect::<Vec<_>>();
+    let mut keys = vec![None; lines.len()];
+
+    for &index in candidate_indices {
+        let range = line_slice_range(lines, index, index + 1, source.len());
+        if diagnostics_overlap_ranges(parsed, &[range]) {
+            continue;
+        }
+
+        let preservation = zones
+            .iter()
+            .filter(|zone| range_overlaps_or_touches(range, zone.range))
+            .map(|zone| {
+                source
+                    .slice(zone.range)
+                    .map(|text| (zone.reason, text.to_owned()))
+                    .map_err(DiffError::Position)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        keys[index] = Some(LineEquivalenceKey {
+            preservation,
+            syntax: syntax_fingerprint(parsed.tree().root_node(), source.text(), range),
+        });
+    }
+
+    Ok(keys)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn syntax_equivalent_line_pairs(
+    chunk: DiffChunk,
+    old_source: &SourceFile,
+    old_parsed: &ParseResult,
+    old_lines: &[LineInfo],
+    old_keys: &[Option<LineEquivalenceKey>],
+    new_source: &SourceFile,
+    new_parsed: &ParseResult,
+    new_lines: &[LineInfo],
+    new_keys: &[Option<LineEquivalenceKey>],
+) -> Vec<(usize, usize)> {
+    if replacement_is_syntax_equivalent(
+        old_source,
+        old_parsed,
+        old_lines,
+        chunk.old_start,
+        chunk.old_end,
+        new_source,
+        new_parsed,
+        new_lines,
+        chunk.new_start,
+        chunk.new_end,
+    ) {
+        let mut pairs = (chunk.old_start..chunk.old_end)
+            .map(|old_index| (old_index, chunk.new_start))
+            .collect::<Vec<_>>();
+        pairs.extend(
+            (chunk.new_start..chunk.new_end).map(|new_index| (chunk.old_start, new_index)),
+        );
+        return pairs;
+    }
+
     let old_len = chunk.old_end - chunk.old_start;
     let new_len = chunk.new_end - chunk.new_start;
-    if old_len == new_len && old_len > 1 {
-        return (0..old_len)
-            .map(|offset| DiffChunk {
-                old_start: chunk.old_start + offset,
-                old_end: chunk.old_start + offset + 1,
-                new_start: chunk.new_start + offset,
-                new_end: chunk.new_start + offset + 1,
-            })
-            .collect();
+    if old_len == 0 || new_len == 0 || old_len.saturating_mul(new_len) > LCS_CELL_LIMIT {
+        return Vec::new();
     }
-    vec![chunk]
+
+    let mut equivalent = vec![false; old_len * new_len];
+    for old_offset in 0..old_len {
+        for new_offset in 0..new_len {
+            let old_key = old_keys
+                .get(chunk.old_start + old_offset)
+                .and_then(Option::as_ref);
+            let new_key = new_keys
+                .get(chunk.new_start + new_offset)
+                .and_then(Option::as_ref);
+            equivalent[old_offset * new_len + new_offset] =
+                old_key.zip(new_key).is_some_and(|(old, new)| old == new);
+        }
+    }
+
+    let width = new_len + 1;
+    let mut lcs = vec![0_u32; (old_len + 1) * (new_len + 1)];
+    for old_offset in (0..old_len).rev() {
+        for new_offset in (0..new_len).rev() {
+            let slot = old_offset * width + new_offset;
+            lcs[slot] = if equivalent[old_offset * new_len + new_offset] {
+                1 + lcs[(old_offset + 1) * width + new_offset + 1]
+            } else {
+                lcs[(old_offset + 1) * width + new_offset]
+                    .max(lcs[old_offset * width + new_offset + 1])
+            };
+        }
+    }
+
+    let mut pairs = Vec::new();
+    let mut old_offset = 0;
+    let mut new_offset = 0;
+    while old_offset < old_len && new_offset < new_len {
+        if equivalent[old_offset * new_len + new_offset] {
+            pairs.push((
+                chunk.old_start + old_offset,
+                chunk.new_start + new_offset,
+            ));
+            old_offset += 1;
+            new_offset += 1;
+            continue;
+        }
+
+        let skip_old = lcs[(old_offset + 1) * width + new_offset];
+        let skip_new = lcs[old_offset * width + new_offset + 1];
+        if skip_old >= skip_new {
+            old_offset += 1;
+        } else {
+            new_offset += 1;
+        }
+    }
+    pairs
 }
 
 fn diff_chunks(old: &[LineInfo], new: &[LineInfo]) -> Vec<DiffChunk> {
@@ -1693,24 +1955,42 @@ fn replacement_is_syntax_equivalent(
     {
         return false;
     }
-    if intersects_semantic_preservation_zone(old_source, old_parsed, old_range)
-        || intersects_semantic_preservation_zone(new_source, new_parsed, new_range)
-    {
+    let Some(old_preservation) =
+        semantic_preservation_signature(old_source, old_parsed, old_range)
+    else {
+        return false;
+    };
+    let Some(new_preservation) =
+        semantic_preservation_signature(new_source, new_parsed, new_range)
+    else {
+        return false;
+    };
+    if old_preservation != new_preservation {
         return false;
     }
     syntax_fingerprint(old_parsed.tree().root_node(), old_source.text(), old_range)
         == syntax_fingerprint(new_parsed.tree().root_node(), new_source.text(), new_range)
 }
 
-fn intersects_semantic_preservation_zone(
+fn semantic_preservation_signature(
     source: &SourceFile,
     parsed: &ParseResult,
     range: ByteRange,
-) -> bool {
-    collect_preservation_zones(parsed.tree().root_node(), source.text())
+) -> Option<Vec<(PreservationReason, String)>> {
+    let mut signature = Vec::new();
+    for zone in collect_preservation_zones(parsed.tree().root_node(), source.text())
         .into_iter()
-        .filter(|zone| !matches!(zone.reason, PreservationReason::Comment))
-        .any(|zone| range_overlaps_or_touches(range, zone.range))
+        .filter(|zone| {
+            !matches!(zone.reason, PreservationReason::Comment)
+                && range_overlaps_or_touches(range, zone.range)
+        })
+    {
+        signature.push((
+            zone.reason,
+            source.slice(zone.range).ok()?.to_owned(),
+        ));
+    }
+    Some(signature)
 }
 
 fn syntax_fingerprint(root: Node<'_>, source: &str, range: ByteRange) -> Vec<String> {
@@ -2426,6 +2706,24 @@ mod tests {
     }
 
     #[test]
+    fn formatting_outside_unchanged_preservation_zones_is_suppressed() {
+        for (old, new) in [
+            ("x=[1 2];\n", "x = [1 2];\n"),
+            ("s=\"text\";\n", "s = \"text\";\n"),
+        ] {
+            let analysis = analyze_replacement(old, new);
+            assert_eq!(
+                analysis.metrics.added_executable_lines, 0,
+                "new side should be formatting-only for {old:?} -> {new:?}"
+            );
+            assert_eq!(
+                analysis.metrics.deleted_executable_lines, 0,
+                "old side should be formatting-only for {old:?} -> {new:?}"
+            );
+        }
+    }
+
+    #[test]
     fn comment_that_starts_with_block_marker_text_does_not_hide_following_code() {
         let analysis = analyze_replacement(
             "%{ explanation, not a block delimiter\nx = 1;\n",
@@ -2449,6 +2747,16 @@ mod tests {
         let analysis = analyze_replacement("a=1;\nb=2;\n", "a = 1;\nb=3;\n");
         assert_eq!(analysis.metrics.added_executable_lines, 1);
         assert_eq!(analysis.metrics.deleted_executable_lines, 1);
+    }
+
+    #[test]
+    fn unequal_chunk_suppresses_formatting_line_beside_insertion() {
+        let analysis = analyze_replacement(
+            "a=1;\nb=2;\n",
+            "a = 1;\ninserted=0;\nb=2;\n",
+        );
+        assert_eq!(analysis.metrics.added_executable_lines, 1);
+        assert_eq!(analysis.metrics.deleted_executable_lines, 0);
     }
 
     #[test]

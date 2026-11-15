@@ -617,9 +617,9 @@ fn fossil_baseline_sources(
         let (path, size) = line.split_once('\t').ok_or_else(|| {
             DiscoveryError::Fossil("unexpected output from fossil sql".to_owned())
         })?;
-        let size = size.parse::<usize>().map_err(|_| {
-            DiscoveryError::Fossil(format!("invalid baseline size for {path:?}"))
-        })?;
+        let size = size
+            .parse::<usize>()
+            .map_err(|_| DiscoveryError::Fossil(format!("invalid baseline size for {path:?}")))?;
         entries.push((PathBuf::from(path), size));
     }
 
@@ -633,11 +633,7 @@ fn fossil_baseline_sources(
     }
 
     let mut command = Command::new("fossil");
-    command
-        .current_dir(root)
-        .arg("cat")
-        .arg("-r")
-        .arg(checkout);
+    command.current_dir(root).arg("cat").arg("-r").arg(checkout);
     for (path, _) in &entries {
         command.arg(path);
     }
@@ -652,14 +648,15 @@ fn fossil_baseline_sources(
     }
 
     let mut sources = BTreeMap::new();
-    let mut cursor = 0;
+    let mut cursor: usize = 0;
     for (path, size) in entries {
-        let end = cursor.checked_add(size).ok_or_else(|| {
-            DiscoveryError::Fossil("baseline content size overflow".to_owned())
-        })?;
-        let bytes = output.stdout.get(cursor..end).ok_or_else(|| {
-            DiscoveryError::Fossil("truncated output from fossil cat".to_owned())
-        })?;
+        let end = cursor
+            .checked_add(size)
+            .ok_or_else(|| DiscoveryError::Fossil("baseline content size overflow".to_owned()))?;
+        let bytes = output
+            .stdout
+            .get(cursor..end)
+            .ok_or_else(|| DiscoveryError::Fossil("truncated output from fossil cat".to_owned()))?;
         let source = std::str::from_utf8(bytes)
             .map_err(|_| DiscoveryError::NonUtf8Source(path.clone()))?
             .to_owned();
