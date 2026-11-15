@@ -7,3 +7,7 @@ line_length = 120
 
 [exclude]
 paths = []
+
+[diff]
+vcs = "auto"
+advisory = true
