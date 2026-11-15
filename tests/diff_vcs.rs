@@ -99,6 +99,7 @@ fn fossil_workspace() -> (PathBuf, Vec<ChangedFile>) {
     run(&checkout, "fossil", &["open", &repository_text]);
     run(&checkout, "fossil", &["settings", "autosync", "off"]);
     write_base_files(&checkout);
+    fs::remove_file(checkout.join("ignored.bin")).expect("remove binary Fossil baseline file");
     run(&checkout, "fossil", &["add", "."]);
     run(
         &checkout,
