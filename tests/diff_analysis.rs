@@ -192,13 +192,15 @@ fn recovered_region_does_not_hide_clean_structural_metrics_elsewhere() {
     )
     .expect("analyze");
 
-    assert_eq!(analysis.files[0].parse_confidence, ParseConfidence::Recovered);
+    assert_eq!(
+        analysis.files[0].parse_confidence,
+        ParseConfidence::Recovered
+    );
     assert_eq!(analysis.decision, DiffDecision::Review);
     assert_eq!(analysis.metrics.functions_touched, 1);
     assert_eq!(analysis.metrics.control_flow_increase, 1);
     assert!(analysis.files[0].functions.iter().any(|function| {
-        function.name == "clean"
-            && function.change == mstyle::diff::FunctionChangeKind::Touched
+        function.name == "clean" && function.change == mstyle::diff::FunctionChangeKind::Touched
     }));
 }
 

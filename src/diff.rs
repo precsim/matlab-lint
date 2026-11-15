@@ -473,12 +473,7 @@ fn analyze_file(
         .as_ref()
         .zip(old_parse.as_ref())
         .map(|(source, parsed)| {
-            line_equivalence_keys(
-                source,
-                parsed,
-                &old_lines,
-                &old_line_equivalence_candidates,
-            )
+            line_equivalence_keys(source, parsed, &old_lines, &old_line_equivalence_candidates)
         })
         .transpose()?
         .unwrap_or_default();
@@ -486,12 +481,7 @@ fn analyze_file(
         .as_ref()
         .zip(new_parse.as_ref())
         .map(|(source, parsed)| {
-            line_equivalence_keys(
-                source,
-                parsed,
-                &new_lines,
-                &new_line_equivalence_candidates,
-            )
+            line_equivalence_keys(source, parsed, &new_lines, &new_line_equivalence_candidates)
         })
         .transpose()?
         .unwrap_or_default();
@@ -510,19 +500,22 @@ fn analyze_file(
             .as_ref()
             .zip(old_parse.as_ref())
             .zip(new_file.as_ref().zip(new_parse.as_ref()))
-            .map_or_else(Vec::new, |((old_source, old_parsed), (new_source, new_parsed))| {
-                syntax_equivalent_line_pairs(
-                    *chunk,
-                    old_source,
-                    old_parsed,
-                    &old_lines,
-                    &old_line_equivalence_keys,
-                    new_source,
-                    new_parsed,
-                    &new_lines,
-                    &new_line_equivalence_keys,
-                )
-            });
+            .map_or_else(
+                Vec::new,
+                |((old_source, old_parsed), (new_source, new_parsed))| {
+                    syntax_equivalent_line_pairs(
+                        *chunk,
+                        old_source,
+                        old_parsed,
+                        &old_lines,
+                        &old_line_equivalence_keys,
+                        new_source,
+                        new_parsed,
+                        &new_lines,
+                        &new_line_equivalence_keys,
+                    )
+                },
+            );
         let formatting_old = formatting_pairs
             .iter()
             .map(|(old_index, _)| *old_index)
@@ -683,11 +676,9 @@ fn analyze_file(
         .keys()
         .filter(|key| {
             !old_function_map.contains_key(*key)
-                && new_function_map
-                    .get(*key)
-                    .is_some_and(|function| {
-                        !ranges_overlap_any(function.range, &new_structural_unsafe_ranges)
-                    })
+                && new_function_map.get(*key).is_some_and(|function| {
+                    !ranges_overlap_any(function.range, &new_structural_unsafe_ranges)
+                })
         })
         .cloned()
         .collect::<BTreeSet<_>>();
@@ -695,11 +686,9 @@ fn analyze_file(
         .keys()
         .filter(|key| {
             !new_function_map.contains_key(*key)
-                && old_function_map
-                    .get(*key)
-                    .is_some_and(|function| {
-                        !ranges_overlap_any(function.range, &old_structural_unsafe_ranges)
-                    })
+                && old_function_map.get(*key).is_some_and(|function| {
+                    !ranges_overlap_any(function.range, &old_structural_unsafe_ranges)
+                })
         })
         .cloned()
         .collect::<BTreeSet<_>>();
@@ -710,14 +699,8 @@ fn analyze_file(
                 .get(key)
                 .filter(|new| {
                     new.signature_fingerprint != old.signature_fingerprint
-                        && !ranges_overlap_any(
-                            old.signature_range,
-                            &old_structural_unsafe_ranges,
-                        )
-                        && !ranges_overlap_any(
-                            new.signature_range,
-                            &new_structural_unsafe_ranges,
-                        )
+                        && !ranges_overlap_any(old.signature_range, &old_structural_unsafe_ranges)
+                        && !ranges_overlap_any(new.signature_range, &new_structural_unsafe_ranges)
                 })
                 .map(|_| key.clone())
         })
@@ -875,10 +858,7 @@ fn analyze_file(
             (new_primary, new_file.as_ref(), new_path)
         {
             let old_primary_unsafe = old_primary.is_some_and(|old_primary| {
-                ranges_overlap_any(
-                    old_primary.signature_range,
-                    &old_structural_unsafe_ranges,
-                )
+                ranges_overlap_any(old_primary.signature_range, &old_structural_unsafe_ranges)
             });
             if !old_primary_unsafe
                 && !signature_changed_keys.contains(&primary.key)
@@ -940,10 +920,7 @@ fn analyze_file(
                 (new_primary, new_file.as_ref(), new_path)
             {
                 let old_primary_unsafe = old_primary.is_some_and(|old_primary| {
-                    ranges_overlap_any(
-                        old_primary.signature_range,
-                        &old_structural_unsafe_ranges,
-                    )
+                    ranges_overlap_any(old_primary.signature_range, &old_structural_unsafe_ranges)
                 });
                 if !old_primary_unsafe
                     && !ranges_overlap_any(primary.signature_range, &new_structural_unsafe_ranges)
@@ -1667,9 +1644,8 @@ fn syntax_equivalent_line_pairs(
         let mut pairs = (chunk.old_start..chunk.old_end)
             .map(|old_index| (old_index, chunk.new_start))
             .collect::<Vec<_>>();
-        pairs.extend(
-            (chunk.new_start..chunk.new_end).map(|new_index| (chunk.old_start, new_index)),
-        );
+        pairs
+            .extend((chunk.new_start..chunk.new_end).map(|new_index| (chunk.old_start, new_index)));
         return pairs;
     }
 
@@ -1712,10 +1688,7 @@ fn syntax_equivalent_line_pairs(
     let mut new_offset = 0;
     while old_offset < old_len && new_offset < new_len {
         if equivalent[old_offset * new_len + new_offset] {
-            pairs.push((
-                chunk.old_start + old_offset,
-                chunk.new_start + new_offset,
-            ));
+            pairs.push((chunk.old_start + old_offset, chunk.new_start + new_offset));
             old_offset += 1;
             new_offset += 1;
             continue;
@@ -1955,13 +1928,11 @@ fn replacement_is_syntax_equivalent(
     {
         return false;
     }
-    let Some(old_preservation) =
-        semantic_preservation_signature(old_source, old_parsed, old_range)
+    let Some(old_preservation) = semantic_preservation_signature(old_source, old_parsed, old_range)
     else {
         return false;
     };
-    let Some(new_preservation) =
-        semantic_preservation_signature(new_source, new_parsed, new_range)
+    let Some(new_preservation) = semantic_preservation_signature(new_source, new_parsed, new_range)
     else {
         return false;
     };
@@ -1985,10 +1956,7 @@ fn semantic_preservation_signature(
                 && range_overlaps_or_touches(range, zone.range)
         })
     {
-        signature.push((
-            zone.reason,
-            source.slice(zone.range).ok()?.to_owned(),
-        ));
+        signature.push((zone.reason, source.slice(zone.range).ok()?.to_owned()));
     }
     Some(signature)
 }
@@ -2751,10 +2719,7 @@ mod tests {
 
     #[test]
     fn unequal_chunk_suppresses_formatting_line_beside_insertion() {
-        let analysis = analyze_replacement(
-            "a=1;\nb=2;\n",
-            "a = 1;\ninserted=0;\nb=2;\n",
-        );
+        let analysis = analyze_replacement("a=1;\nb=2;\n", "a = 1;\ninserted=0;\nb=2;\n");
         assert_eq!(analysis.metrics.added_executable_lines, 1);
         assert_eq!(analysis.metrics.deleted_executable_lines, 0);
     }
