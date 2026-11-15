@@ -438,10 +438,7 @@ fn discover_fossil_working_tree(cwd: &Path) -> Result<ChangedWorkspace, Discover
     let root = fossil_local_root(info)?;
     let checkout = fossil_checkout_id(info)?;
 
-    let changes = run_fossil(
-        &root,
-        &["changes", "--hash", "--classify", "--rel-paths"],
-    )?;
+    let changes = run_fossil(&root, &["changes", "--hash", "--classify", "--rel-paths"])?;
     let extras = run_fossil(&root, &["extras", "--rel-paths"])?;
     let changes = std::str::from_utf8(&changes).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
     let extras = std::str::from_utf8(&extras).map_err(|_| DiscoveryError::NonUtf8FossilOutput)?;
