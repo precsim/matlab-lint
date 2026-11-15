@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -314,13 +316,12 @@ fn generated_and_test_classification_is_stable_in_json() {
     assert_eq!(analysis.files[1].classification, FileClass::Test);
     let json = serde_json::to_value(&analysis).expect("serialize analysis");
     assert_eq!(json["decision"], "ACCEPT");
-    assert_eq!(
+    assert!(
         json["files"][0]["facts"]
             .as_array()
             .expect("facts")
             .iter()
-            .all(|fact| fact["kind"].as_str().is_some()),
-        true
+            .all(|fact| fact["kind"].as_str().is_some())
     );
 }
 
