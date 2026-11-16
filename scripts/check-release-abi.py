@@ -17,13 +17,6 @@ WINDOWS_LIBRARIES = {
     "ntdll.dll",
     "userenv.dll",
     "api-ms-win-core-synch-l1-2-0.dll",
-    "vcruntime140.dll",
-    "api-ms-win-crt-heap-l1-1-0.dll",
-    "api-ms-win-crt-string-l1-1-0.dll",
-    "api-ms-win-crt-math-l1-1-0.dll",
-    "api-ms-win-crt-stdio-l1-1-0.dll",
-    "api-ms-win-crt-runtime-l1-1-0.dll",
-    "api-ms-win-crt-locale-l1-1-0.dll",
 }
 
 
@@ -124,8 +117,15 @@ def main() -> int:
         elif args.target == "x86_64-pc-windows-msvc":
             imports = pe_imports(args.binary)
             print(f"Windows DLL imports: {sorted(imports)}")
-            if not imports or imports - WINDOWS_LIBRARIES:
-                raise ValueError(f"unexpected Windows DLL imports: {sorted(imports - WINDOWS_LIBRARIES)}")
+            runtime_imports = {
+                name for name in imports
+                if name.startswith(("vcruntime", "msvcp", "msvcr", "ucrtbase", "api-ms-win-crt-"))
+            }
+            if runtime_imports:
+                raise ValueError(f"dynamically linked Windows CRT libraries: {sorted(runtime_imports)}")
+            unexpected = imports - WINDOWS_LIBRARIES
+            if not imports or unexpected:
+                raise ValueError(f"unexpected Windows DLL imports: {sorted(unexpected)}")
         else:
             raise ValueError(f"unsupported ABI inspection target: {args.target}")
     except (OSError, ValueError, subprocess.CalledProcessError, struct.error) as exc:

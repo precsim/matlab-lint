@@ -50,7 +50,7 @@ The release workflow builds and publishes these explicit targets:
 
 Each binary is accompanied by a `.sha256` checksum that can be verified from the directory containing the downloaded binary and checksum file.
 
-Linux release jobs use the pinned `ubuntu-24.04` runner image. The GNU binary is checked for a maximum non-weak glibc symbol version of 2.34 and an explicit shared-library allowlist. The musl binary must have no ELF interpreter or dynamically linked shared libraries. The Windows release job rejects unexpected imported DLLs. These checks run before artifacts are packaged and published.
+Linux release jobs use the pinned `ubuntu-24.04` runner image. The GNU binary is checked for a maximum non-weak glibc symbol version of 2.34 and an explicit shared-library allowlist. The musl binary must have no ELF interpreter or dynamically linked shared libraries. The Windows binary is built with `-C target-feature=+crt-static`; its PE import check rejects dynamic CRT libraries (including `VCRUNTIME140.dll`) and unexpected DLL dependencies. These checks run before artifacts are packaged and published.
 
 ## Release validation
 
