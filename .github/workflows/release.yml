@@ -130,6 +130,8 @@ jobs:
           sudo apt-get install -y musl-tools
 
       - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
         run: cargo build --locked --release --target ${{ matrix.target }}
 
       - name: Inspect Linux ELF dependencies and ABI

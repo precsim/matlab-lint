@@ -52,6 +52,8 @@ Install a specific release or choose another directory:
 
 The published Windows target is x86_64.
 
+Starting with the next release that contains it, Windows executables statically link the Microsoft C runtime, so installing the Visual C++ Redistributable is not required just to run `mstyle`. The v0.2.0 Windows executable still imports `VCRUNTIME140.dll`.
+
 ## CI and non-interactive use
 
 Both installers support explicit environment overrides:

@@ -96,7 +96,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Release build
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
         run: cargo build --locked --release
+
+      - name: Inspect Windows PE imports
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python scripts/check-release-abi.py --target x86_64-pc-windows-msvc target/release/mstyle.exe
 
       - name: Standalone binary smoke
         shell: bash
