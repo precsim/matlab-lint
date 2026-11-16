@@ -18,7 +18,7 @@ The default installation directory is `~/.local/bin`.
 Install a specific release or choose another directory:
 
 ```bash
-sh install-mstyle.sh --version v0.3.0
+sh install-mstyle.sh --version v0.4.0
 sh install-mstyle.sh --install-dir "$HOME/bin"
 ```
 
@@ -46,7 +46,7 @@ The default installation directory is `%LOCALAPPDATA%\mstyle\bin`.
 Install a specific release or choose another directory:
 
 ```powershell
-& "$env:TEMP\install-mstyle.ps1" -Version v0.3.0
+& "$env:TEMP\install-mstyle.ps1" -Version v0.4.0
 & "$env:TEMP\install-mstyle.ps1" -InstallDir "$HOME\bin"
 ```
 
