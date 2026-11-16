@@ -3,19 +3,21 @@ set -eu
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--version TAG|latest] [--install-dir DIR] [--dry-run]
+Usage: install.sh [--version TAG|latest] [--install-dir DIR] [--libc gnu|musl] [--dry-run]
 
 Downloads and verifies a released mstyle binary.
 
 Environment overrides:
   MSTYLE_VERSION      Release tag such as vX.Y.Z, or latest
   MSTYLE_INSTALL_DIR  Installation directory
+  MSTYLE_LIBC         Linux binary flavor: gnu (default) or musl
 EOF
 }
 
 version="${MSTYLE_VERSION:-latest}"
 install_dir="${MSTYLE_INSTALL_DIR:-${HOME:?HOME is not set}/.local/bin}"
 dry_run=0
+libc="${MSTYLE_LIBC:-gnu}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -32,6 +34,11 @@ while [ "$#" -gt 0 ]; do
     --dry-run)
       dry_run=1
       shift
+      ;;
+    --libc)
+      [ "$#" -ge 2 ] || { echo "install.sh: --libc requires a value" >&2; exit 2; }
+      libc="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -77,6 +84,20 @@ if [ "$platform" = "linux" ] && [ "$arch" != "x86_64" ]; then
 fi
 
 asset="mstyle-$platform-$arch"
+case "$libc" in
+  gnu) ;;
+  musl)
+    if [ "$platform" != linux ]; then
+      echo "install.sh: --libc musl is only supported on Linux" >&2
+      exit 2
+    fi
+    asset="$asset-musl"
+    ;;
+  *)
+    echo "install.sh: --libc must be gnu or musl" >&2
+    exit 2
+    ;;
+esac
 
 case "$version" in
   latest)

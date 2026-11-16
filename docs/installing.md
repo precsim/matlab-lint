@@ -24,6 +24,14 @@ sh install-mstyle.sh --install-dir "$HOME/bin"
 
 The published Unix targets are Linux x86_64, macOS x86_64, and macOS arm64.
 
+Starting with the next release that contains it, Linux x86_64 also has a statically linked musl binary for systems without glibc, such as Alpine Linux. Select it explicitly:
+
+```bash
+sh install-mstyle.sh --libc musl
+```
+
+The default `gnu` flavor preserves compatibility with existing releases. Its current release requires glibc 2.34 or newer. The `musl` option is unavailable in the v0.2.0 release and earlier.
+
 ## Windows
 
 From PowerShell:
@@ -50,6 +58,7 @@ Both installers support explicit environment overrides:
 
 - `MSTYLE_VERSION`: `latest` or a release tag such as `vX.Y.Z`
 - `MSTYLE_INSTALL_DIR`: destination directory
+- `MSTYLE_LIBC`: `gnu` (default) or `musl` (Linux only)
 
 Both also support a dry-run mode that resolves the platform-specific asset and prints the URLs and destination without downloading anything:
 

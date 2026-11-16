@@ -42,12 +42,15 @@ The release workflow builds and publishes these explicit targets:
 
 | Release asset | Rust target | Runner |
 | --- | --- | --- |
-| `mstyle-linux-x86_64` | `x86_64-unknown-linux-gnu` | `ubuntu-latest` |
+| `mstyle-linux-x86_64` | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` |
+| `mstyle-linux-x86_64-musl` | `x86_64-unknown-linux-musl` | `ubuntu-24.04` |
 | `mstyle-windows-x86_64.exe` | `x86_64-pc-windows-msvc` | `windows-latest` |
 | `mstyle-macos-x86_64` | `x86_64-apple-darwin` | `macos-15-intel` |
 | `mstyle-macos-arm64` | `aarch64-apple-darwin` | `macos-15` |
 
 Each binary is accompanied by a `.sha256` checksum that can be verified from the directory containing the downloaded binary and checksum file.
+
+Linux release jobs use the pinned `ubuntu-24.04` runner image. The GNU binary is checked for a maximum non-weak glibc symbol version of 2.34 and an explicit shared-library allowlist. The musl binary must have no ELF interpreter or dynamically linked shared libraries. The Windows release job rejects unexpected imported DLLs. These checks run before artifacts are packaged and published.
 
 ## Release validation
 
