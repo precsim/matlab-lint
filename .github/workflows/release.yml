@@ -13,6 +13,8 @@ on:
   pull_request:
     paths:
       - ".github/workflows/release.yml"
+      - "scripts/check-release-abi.py"
+      - "scripts/install.sh"
       - "Cargo.toml"
       - "Cargo.lock"
 
@@ -22,7 +24,7 @@ permissions:
 jobs:
   validate:
     name: Validate release request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.release.outputs.tag }}
 
@@ -93,10 +95,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             binary: mstyle
             artifact: mstyle-linux-x86_64
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            binary: mstyle
+            artifact: mstyle-linux-x86_64-musl
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             binary: mstyle.exe
@@ -117,8 +123,23 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install musl linker
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Build release binary
         run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Inspect Linux ELF dependencies and ABI
+        if: runner.os == 'Linux'
+        run: python3 scripts/check-release-abi.py --target '${{ matrix.target }}' 'target/${{ matrix.target }}/release/${{ matrix.binary }}'
+
+      - name: Inspect Windows PE imports
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python scripts/check-release-abi.py --target '${{ matrix.target }}' 'target/${{ matrix.target }}/release/${{ matrix.binary }}'
 
       - name: Stage binary and checksum
         shell: bash
@@ -176,8 +197,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             artifact: mstyle-linux-x86_64
+          - runner: ubuntu-24.04
+            artifact: mstyle-linux-x86_64-musl
           - runner: windows-latest
             artifact: mstyle-windows-x86_64.exe
           - runner: macos-15-intel
@@ -238,7 +261,7 @@ jobs:
     needs:
       - validate
       - smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
