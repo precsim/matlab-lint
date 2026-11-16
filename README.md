@@ -53,7 +53,7 @@ Format source from stdin and write the result to stdout:
 printf 'x=1 ;' | mstyle fmt --stdin
 ```
 
-`--stdin` is stream-only and cannot be combined with paths, `--check`, or `--diff`.
+`--stdin` is stream-only and cannot be combined with paths, `--check`, `--changed`, or `--diff`.
 
 Run lint diagnostics:
 
@@ -144,13 +144,16 @@ Formats files in place by default. With no path, discovery starts from the curre
 | --- | --- |
 | `[PATH]...` | Files or directories to format |
 | `--check` | Report formatting violations without modifying files |
+| `--format <text|json>` | Diagnostic output for `--check`; default: `text` |
 | `--stdin` | Read source from stdin and write formatted source to stdout |
 | `--diff <BASE>` | Format-check only files changed relative to `merge-base(BASE, HEAD)`; requires `--check` |
+| `--changed` | Format-check staged, unstaged, and non-ignored untracked MATLAB files; requires `--check` |
 
 Important combinations:
 
-- `--stdin` cannot be combined with paths, `--check`, or `--diff`.
-- `--diff` requires `--check` and cannot be combined with explicit paths.
+- `--stdin` cannot be combined with paths, `--check`, `--diff`, or `--changed`.
+- `--diff` and `--changed` require `--check` and cannot be combined with explicit paths or each other.
+- `--format json` is available in check mode; it emits the same rule IDs, source ranges, and fixable flags as `mstyle check`.
 - Plain `fmt` writes changes transactionally; `fmt --check` never writes.
 
 Examples:
@@ -160,6 +163,7 @@ mstyle fmt model.m
 mstyle fmt src/
 mstyle fmt --check .
 mstyle fmt --check --diff origin/main
+mstyle fmt --check --changed --format json
 printf 'x=1 ;' | mstyle fmt --stdin
 ```
 
@@ -175,6 +179,8 @@ Runs lint diagnostics only and never modifies files. With no path, discovery sta
 | --- | --- |
 | `[PATH]...` | Files or directories to lint |
 | `--format <text|json>` | Diagnostic output format; default: `text` |
+| `--diff <BASE>` | Lint MATLAB files changed relative to `merge-base(BASE, HEAD)`, plus local changes |
+| `--changed` | Lint staged, unstaged, and non-ignored untracked MATLAB files relative to `HEAD` |
 
 Examples:
 
@@ -182,6 +188,8 @@ Examples:
 mstyle lint .
 mstyle lint src/
 mstyle lint --format json src/
+mstyle lint --changed
+mstyle lint --diff origin/main
 ```
 
 ### `mstyle diff-check`
@@ -245,6 +253,7 @@ line_length = 120
 [rules]
 L001 = "error"
 F010 = "warning"
+L010 = "off"
 
 [exclude]
 paths = ["vendor/**", "generated/**"]
@@ -276,7 +285,7 @@ match = "context"
 
 Unknown configuration keys and unknown rule IDs are rejected.
 
-Supported rule severity values are `"error"` and `"warning"`. Formatter rules default to error severity; lint rules default to warning severity.
+Supported rule values are `"error"`, `"warning"`, and `"off"`. Setting a rule to `"off"` suppresses the rule in `check`, `lint`, and formatting. Formatter rules default to error severity and lint rules default to warning severity, except L010 (missing semicolon), which defaults to off. `PARSE` diagnostics cannot be disabled.
 
 ## Rules
 
@@ -295,17 +304,26 @@ Supported rule severity values are `"error"` and `"warning"`. Formatter rules de
 | F011 | format | Remove whitespace around range colons |
 | L001 | lint | Report lines longer than the configured limit |
 | L002 | lint | Report multiple statements on one line |
+| L003 | lint | Discourage global declarations |
+| L004 | lint | Discourage dynamic evaluation with `eval` / `evalin` |
+| L005 | lint | Report wildcard imports |
+| L006 | lint | Report primary function/class filename mismatch |
+| L007 | lint | Report duplicate local function names |
+| L008 | lint | Report duplicate literal switch cases |
+| L009 | lint | Report unreachable statements after unconditional control transfer |
+| L010 | lint | Report missing semicolons in supported function assignments (off by default) |
 | PARSE | diagnostic | Report syntax recovery/errors that block structural formatting |
 
 Formatting remains conservative around matrix/cell literals, unary operators, transpose syntax, command form, strings/character vectors, line continuations, comments, and known parser ambiguities.
 
 ## Machine-readable diagnostics
 
-`check` and `lint` support JSON output:
+`check`, `lint`, and `fmt --check` support JSON output:
 
 ```bash
 mstyle check --format json src/
 mstyle lint --format json src/
+mstyle fmt --check --format json src/
 ```
 
 Diagnostics include stable rule IDs, severity, file, 1-based line/column spans, 0-based half-open UTF-8 byte offsets, message, and whether the issue is fixable.

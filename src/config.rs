@@ -44,6 +44,12 @@ impl Config {
             .unwrap_or_else(|| default_severity(rule_id))
     }
 
+    pub fn enabled(&self, rule_id: &str) -> bool {
+        self.rules
+            .enabled(rule_id)
+            .unwrap_or_else(|| default_enabled(rule_id))
+    }
+
     fn validate(&self) -> Result<(), ConfigError> {
         self.diff.validate()
     }
@@ -55,6 +61,32 @@ fn default_severity(rule_id: &str) -> Severity {
     } else {
         Severity::Warning
     }
+}
+
+fn default_enabled(rule_id: &str) -> bool {
+    matches!(
+        rule_id,
+        "F001"
+            | "F002"
+            | "F003"
+            | "F004"
+            | "F005"
+            | "F006"
+            | "F007"
+            | "F008"
+            | "F009"
+            | "F010"
+            | "F011"
+            | "L001"
+            | "L002"
+            | "L003"
+            | "L004"
+            | "L005"
+            | "L006"
+            | "L007"
+            | "L008"
+            | "L009"
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -121,11 +153,35 @@ pub struct RulesConfig {
     pub l001: Option<SeveritySetting>,
     #[serde(rename = "L002")]
     pub l002: Option<SeveritySetting>,
+    #[serde(rename = "L003")]
+    pub l003: Option<SeveritySetting>,
+    #[serde(rename = "L004")]
+    pub l004: Option<SeveritySetting>,
+    #[serde(rename = "L005")]
+    pub l005: Option<SeveritySetting>,
+    #[serde(rename = "L006")]
+    pub l006: Option<SeveritySetting>,
+    #[serde(rename = "L007")]
+    pub l007: Option<SeveritySetting>,
+    #[serde(rename = "L008")]
+    pub l008: Option<SeveritySetting>,
+    #[serde(rename = "L009")]
+    pub l009: Option<SeveritySetting>,
+    #[serde(rename = "L010")]
+    pub l010: Option<SeveritySetting>,
 }
 
 impl RulesConfig {
     fn severity(&self, rule_id: &str) -> Option<Severity> {
-        let setting = match rule_id {
+        self.setting(rule_id).and_then(SeveritySetting::severity)
+    }
+
+    fn enabled(&self, rule_id: &str) -> Option<bool> {
+        self.setting(rule_id).map(SeveritySetting::enabled)
+    }
+
+    fn setting(&self, rule_id: &str) -> Option<SeveritySetting> {
+        match rule_id {
             "F001" => self.f001,
             "F002" => self.f002,
             "F003" => self.f003,
@@ -139,10 +195,16 @@ impl RulesConfig {
             "F011" => self.f011,
             "L001" => self.l001,
             "L002" => self.l002,
+            "L003" => self.l003,
+            "L004" => self.l004,
+            "L005" => self.l005,
+            "L006" => self.l006,
+            "L007" => self.l007,
+            "L008" => self.l008,
+            "L009" => self.l009,
+            "L010" => self.l010,
             _ => None,
-        }?;
-
-        Some(setting.into())
+        }
     }
 }
 
@@ -151,13 +213,19 @@ impl RulesConfig {
 pub enum SeveritySetting {
     Error,
     Warning,
+    Off,
 }
 
-impl From<SeveritySetting> for Severity {
-    fn from(value: SeveritySetting) -> Self {
-        match value {
-            SeveritySetting::Error => Self::Error,
-            SeveritySetting::Warning => Self::Warning,
+impl SeveritySetting {
+    const fn enabled(self) -> bool {
+        !matches!(self, Self::Off)
+    }
+
+    const fn severity(self) -> Option<Severity> {
+        match self {
+            Self::Error => Some(Severity::Error),
+            Self::Warning => Some(Severity::Warning),
+            Self::Off => None,
         }
     }
 }
@@ -462,6 +530,12 @@ mod tests {
         assert_eq!(config.lint.line_length, 120);
         assert_eq!(config.severity("F001"), Severity::Error);
         assert_eq!(config.severity("L001"), Severity::Warning);
+        assert!(config.enabled("F001"));
+        assert!(config.enabled("F011"));
+        assert!(config.enabled("L001"));
+        assert!(config.enabled("L009"));
+        assert!(!config.enabled("L010"));
+        assert!(!config.enabled("L999"));
         assert!(config.exclude.paths.is_empty());
         assert_eq!(config.diff.vcs, DiffVcs::Auto);
         assert!(config.diff.advisory);
@@ -483,6 +557,9 @@ mod tests {
                 [rules]
                 L001 = "error"
                 F007 = "warning"
+                F011 = "off"
+                L009 = "off"
+                L010 = "warning"
 
                 [exclude]
                 paths = ["vendor/**", "build/**"]
@@ -495,7 +572,51 @@ mod tests {
         assert_eq!(config.lint.line_length, 100);
         assert_eq!(config.severity("L001"), Severity::Error);
         assert_eq!(config.severity("F007"), Severity::Warning);
+        assert!(config.enabled("L001"));
+        assert!(config.enabled("F007"));
+        assert!(!config.enabled("F011"));
+        assert!(!config.enabled("L009"));
+        assert!(config.enabled("L010"));
+        assert_eq!(config.severity("L010"), Severity::Warning);
         assert_eq!(config.exclude.paths, ["vendor/**", "build/**"]);
+    }
+
+    #[test]
+    fn accepts_all_supported_rule_ids_and_off_values() {
+        let config = Config::parse(
+            r#"
+                [rules]
+                F001 = "off"
+                F002 = "off"
+                F003 = "off"
+                F004 = "off"
+                F005 = "off"
+                F006 = "off"
+                F007 = "off"
+                F008 = "off"
+                F009 = "off"
+                F010 = "off"
+                F011 = "off"
+                L001 = "off"
+                L002 = "off"
+                L003 = "off"
+                L004 = "off"
+                L005 = "off"
+                L006 = "off"
+                L007 = "off"
+                L008 = "off"
+                L009 = "off"
+                L010 = "off"
+            "#,
+        )
+        .expect("all supported rule IDs should accept off");
+
+        for index in 1..=11 {
+            assert!(!config.enabled(&format!("F{index:03}")));
+        }
+        for index in 1..=10 {
+            assert!(!config.enabled(&format!("L{index:03}")));
+        }
     }
 
     #[test]

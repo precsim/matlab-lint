@@ -28,6 +28,7 @@ impl LineEnding {
 pub struct FormatterOptions {
     pub indent_width: usize,
     pub line_ending: LineEnding,
+    pub rules: FormatterRuleSet,
 }
 
 impl Default for FormatterOptions {
@@ -35,8 +36,69 @@ impl Default for FormatterOptions {
         Self {
             indent_width: 2,
             line_ending: LineEnding::Lf,
+            rules: FormatterRuleSet::all(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FormatterRuleSet(u16);
+
+impl FormatterRuleSet {
+    const ALL_MASK: u16 = (1 << 11) - 1;
+
+    pub const fn all() -> Self {
+        Self(Self::ALL_MASK)
+    }
+
+    pub const fn none() -> Self {
+        Self(0)
+    }
+
+    pub fn is_enabled(self, rule_id: &str) -> bool {
+        rule_bit(rule_id).is_some_and(|bit| self.0 & bit != 0)
+    }
+
+    pub fn set_enabled(&mut self, rule_id: &str, enabled: bool) {
+        let Some(bit) = rule_bit(rule_id) else {
+            return;
+        };
+
+        if enabled {
+            self.0 |= bit;
+        } else {
+            self.0 &= !bit;
+        }
+    }
+
+    pub fn with_enabled(mut self, rule_id: &str, enabled: bool) -> Self {
+        self.set_enabled(rule_id, enabled);
+        self
+    }
+}
+
+impl Default for FormatterRuleSet {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
+fn rule_bit(rule_id: &str) -> Option<u16> {
+    let index = match rule_id {
+        "F001" => 0,
+        "F002" => 1,
+        "F003" => 2,
+        "F004" => 3,
+        "F005" => 4,
+        "F006" => 5,
+        "F007" => 6,
+        "F008" => 7,
+        "F009" => 8,
+        "F010" => 9,
+        "F011" => 10,
+        _ => return None,
+    };
+    Some(1 << index)
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +145,7 @@ pub fn format_source_with_parse(
     parsed: &ParseResult,
 ) -> Result<FormatOutcome, FormatterError> {
     let parse_diagnostics = parsed.diagnostics().to_vec();
-    let mut edits = lexical::collect_edits(source.text(), options.line_ending);
+    let mut edits = collect_lexical_edits(source.text(), options);
 
     if parsed.structural_formatting_allowed() {
         let zones = collect_preservation_zones(parsed.tree().root_node(), source.text());
@@ -99,6 +161,8 @@ pub fn format_source_with_parse(
             &zones,
         ));
     }
+
+    edits.retain(|edit| options.rules.is_enabled(&edit.rule_id));
 
     let edits = normalize_edits(source.len(), edits)?;
     let output = apply_edits(source.text(), edits.clone())?;
@@ -120,6 +184,34 @@ pub fn format_source_with_parse(
         edits,
         parse_diagnostics,
     })
+}
+
+fn collect_lexical_edits(source: &str, options: FormatterOptions) -> Vec<Edit> {
+    let trailing_whitespace = options.rules.is_enabled("F001");
+    let eof_newline = options.rules.is_enabled("F002");
+    let line_endings = options.rules.is_enabled("F003");
+
+    lexical::collect_edits(source, options.line_ending)
+        .into_iter()
+        .filter_map(|edit| match edit.rule_id.as_str() {
+            "F001" => trailing_whitespace.then_some(edit),
+            "F002" => match (trailing_whitespace, eof_newline) {
+                (true, true) => Some(edit),
+                (false, true) => Some(Edit::new(
+                    source.len(),
+                    source.len(),
+                    options.line_ending.as_str(),
+                    "F002",
+                )),
+                (true, false) if !edit.range.is_empty() => {
+                    Some(Edit::new(edit.range.start, edit.range.end, "", "F001"))
+                }
+                _ => None,
+            },
+            "F003" => line_endings.then_some(edit),
+            _ => Some(edit),
+        })
+        .collect()
 }
 
 #[derive(Debug)]
@@ -184,5 +276,80 @@ mod tests {
 
         assert!(first.changed());
         assert!(!second.changed());
+    }
+
+    #[test]
+    fn formatter_rule_set_defaults_to_all_existing_rules() {
+        let rules = FormatterRuleSet::default();
+
+        for index in 1..=11 {
+            assert!(rules.is_enabled(&format!("F{index:03}")));
+        }
+        assert!(!rules.is_enabled("L001"));
+        assert!(!rules.is_enabled("F999"));
+    }
+
+    #[test]
+    fn disabled_structural_rule_does_not_emit_or_apply_edits() {
+        let source = SourceFile::new("assignment.m", "x=1;\n");
+        let options = FormatterOptions {
+            rules: FormatterRuleSet::all().with_enabled("F007", false),
+            ..FormatterOptions::default()
+        };
+        let outcome = format_source(&source, options).expect("format");
+
+        assert_eq!(outcome.output(), source.text());
+        assert!(outcome.edits().iter().all(|edit| edit.rule_id != "F007"));
+    }
+
+    #[test]
+    fn disabled_lexical_rules_are_suppressed_on_malformed_source() {
+        let source = SourceFile::new("broken.m", "x = 1 + ;   ");
+        let options = FormatterOptions {
+            rules: FormatterRuleSet::none(),
+            ..FormatterOptions::default()
+        };
+        let outcome = format_source(&source, options).expect("format");
+
+        assert!(outcome.has_parse_errors());
+        assert_eq!(outcome.output(), source.text());
+        assert!(outcome.edits().is_empty());
+    }
+
+    #[test]
+    fn trailing_whitespace_and_eof_newline_can_be_toggled_independently() {
+        let source = SourceFile::new("lexical.m", "x = 1;   ");
+
+        let without_trailing_cleanup = format_source(
+            &source,
+            FormatterOptions {
+                rules: FormatterRuleSet::all().with_enabled("F001", false),
+                ..FormatterOptions::default()
+            },
+        )
+        .expect("format without F001");
+        assert_eq!(without_trailing_cleanup.output(), "x = 1;   \n");
+        assert!(
+            without_trailing_cleanup
+                .edits()
+                .iter()
+                .all(|edit| edit.rule_id != "F001")
+        );
+
+        let without_eof_newline = format_source(
+            &source,
+            FormatterOptions {
+                rules: FormatterRuleSet::all().with_enabled("F002", false),
+                ..FormatterOptions::default()
+            },
+        )
+        .expect("format without F002");
+        assert_eq!(without_eof_newline.output(), "x = 1;");
+        assert!(
+            without_eof_newline
+                .edits()
+                .iter()
+                .all(|edit| edit.rule_id != "F002")
+        );
     }
 }

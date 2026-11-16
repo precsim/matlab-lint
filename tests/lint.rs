@@ -16,6 +16,14 @@ fn lint_reports_line_length_and_multiple_statements_deterministically() {
             line_length: 10,
             line_length_severity: Severity::Warning,
             multiple_statements_severity: Severity::Error,
+            global_severity: Severity::Warning,
+            eval_severity: Severity::Warning,
+            wildcard_import_severity: Severity::Warning,
+            file_name_mismatch_severity: Severity::Warning,
+            duplicate_local_function_severity: Severity::Warning,
+            duplicate_case_severity: Severity::Warning,
+            unreachable_statement_severity: Severity::Warning,
+            missing_semicolon_severity: None,
         },
     )
     .expect("lint");
