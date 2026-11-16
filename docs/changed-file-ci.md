@@ -4,6 +4,8 @@ For local development, check staged, unstaged, and untracked MATLAB files withou
 
 ```bash
 mstyle check --changed
+mstyle lint --changed
+mstyle fmt --check --changed
 ```
 
 `--changed` compares tracked files with `HEAD` and includes untracked `.m` files that are not ignored by Git. Deleted files are omitted. Configured `[exclude].paths` patterns remain authoritative.
@@ -20,5 +22,7 @@ For gradual adoption in CI, fetch enough Git history to resolve the branch point
 ```
 
 `--diff <base>` resolves `merge-base(<base>, HEAD)` and checks the surviving tracked MATLAB paths changed relative to that branch point, including staged and unstaged work. It also includes untracked `.m` files that are not ignored by Git or `mstyle.toml`.
+
+For lint-only or formatter-only CI, use `mstyle lint --diff origin/main` or `mstyle fmt --check --diff origin/main`. `fmt --check --format json` additionally emits rule-level formatting diagnostics for CI and editor tooling.
 
 Tracked changed files are not dropped merely because they now match `.gitignore`. Configured `[exclude].paths` patterns remain authoritative.

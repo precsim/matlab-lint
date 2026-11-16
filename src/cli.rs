@@ -44,18 +44,30 @@ pub enum Command {
         #[arg(long)]
         check: bool,
 
+        /// Diagnostic output format for --check.
+        #[arg(long, value_enum, requires = "check")]
+        format: Option<OutputFormat>,
+
         /// Read source from stdin and write formatted source to stdout.
-        #[arg(long, conflicts_with_all = ["check", "diff", "paths"])]
+        #[arg(long, conflicts_with_all = ["check", "diff", "changed", "paths"])]
         stdin: bool,
 
         /// Format-check only MATLAB files changed relative to the merge-base with BASE.
         #[arg(
             long,
             value_name = "BASE",
-            conflicts_with = "paths",
+            conflicts_with_all = ["paths", "changed"],
             requires = "check"
         )]
         diff: Option<String>,
+
+        /// Format-check only staged, unstaged, and untracked MATLAB files.
+        #[arg(
+            long,
+            conflicts_with_all = ["paths", "diff"],
+            requires = "check"
+        )]
+        changed: bool,
 
         /// Files or directories to format. Defaults to the current directory.
         #[arg(value_name = "PATH")]
@@ -64,6 +76,14 @@ pub enum Command {
 
     /// Run lint diagnostics without modifying files.
     Lint {
+        /// Lint only MATLAB files changed relative to the merge-base with BASE.
+        #[arg(long, value_name = "BASE", conflicts_with_all = ["paths", "changed"])]
+        diff: Option<String>,
+
+        /// Lint only staged, unstaged, and untracked MATLAB files.
+        #[arg(long, conflicts_with_all = ["paths", "diff"])]
+        changed: bool,
+
         /// Files or directories to lint. Defaults to the current directory.
         #[arg(value_name = "PATH")]
         paths: Vec<PathBuf>,
@@ -168,13 +188,17 @@ mod tests {
             Command::Fmt {
                 paths,
                 check,
+                format,
                 diff,
+                changed,
                 stdin,
             } => {
                 assert!(check);
                 assert!(!stdin);
                 assert!(paths.is_empty());
                 assert_eq!(diff.as_deref(), Some("origin/main"));
+                assert!(!changed);
+                assert_eq!(format, None);
             }
             other => panic!("unexpected command: {other:?}"),
         }
@@ -189,6 +213,43 @@ mod tests {
     }
 
     #[test]
+    fn parses_fmt_check_changed_json_command() {
+        let cli =
+            Cli::try_parse_from(["mstyle", "fmt", "--check", "--changed", "--format", "json"])
+                .expect("CLI should parse");
+
+        match cli.command {
+            Command::Fmt {
+                paths,
+                check,
+                format,
+                diff,
+                changed,
+                stdin,
+            } => {
+                assert!(check);
+                assert_eq!(format, Some(OutputFormat::Json));
+                assert!(diff.is_none());
+                assert!(changed);
+                assert!(!stdin);
+                assert!(paths.is_empty());
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_fmt_changed_without_check_or_with_paths() {
+        assert!(Cli::try_parse_from(["mstyle", "fmt", "--changed"]).is_err());
+        assert!(Cli::try_parse_from(["mstyle", "fmt", "--check", "--changed", "src"]).is_err());
+    }
+
+    #[test]
+    fn rejects_fmt_format_without_check() {
+        assert!(Cli::try_parse_from(["mstyle", "fmt", "--format", "json"]).is_err());
+    }
+
+    #[test]
     fn parses_fmt_stdin_command() {
         let cli = Cli::try_parse_from(["mstyle", "fmt", "--stdin"]).expect("CLI should parse");
 
@@ -196,12 +257,16 @@ mod tests {
             Command::Fmt {
                 paths,
                 check,
+                format,
                 diff,
+                changed,
                 stdin,
             } => {
                 assert!(stdin);
                 assert!(!check);
+                assert_eq!(format, None);
                 assert!(diff.is_none());
+                assert!(!changed);
                 assert!(paths.is_empty());
             }
             other => panic!("unexpected command: {other:?}"),
@@ -212,6 +277,50 @@ mod tests {
     fn rejects_fmt_stdin_with_paths_or_check() {
         assert!(Cli::try_parse_from(["mstyle", "fmt", "--stdin", "file.m"]).is_err());
         assert!(Cli::try_parse_from(["mstyle", "fmt", "--stdin", "--check"]).is_err());
+    }
+
+    #[test]
+    fn parses_lint_diff_and_changed_commands() {
+        let diff = Cli::try_parse_from(["mstyle", "lint", "--diff", "origin/main"])
+            .expect("lint --diff should parse");
+        match diff.command {
+            Command::Lint {
+                paths,
+                format,
+                diff,
+                changed,
+            } => {
+                assert!(paths.is_empty());
+                assert_eq!(format, OutputFormat::Text);
+                assert_eq!(diff.as_deref(), Some("origin/main"));
+                assert!(!changed);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let changed = Cli::try_parse_from(["mstyle", "lint", "--changed"]).expect("lint --changed");
+        match changed.command {
+            Command::Lint {
+                paths,
+                format,
+                diff,
+                changed,
+            } => {
+                assert!(paths.is_empty());
+                assert_eq!(format, OutputFormat::Text);
+                assert!(diff.is_none());
+                assert!(changed);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_lint_changed_with_diff_or_paths() {
+        assert!(
+            Cli::try_parse_from(["mstyle", "lint", "--changed", "--diff", "origin/main"]).is_err()
+        );
+        assert!(Cli::try_parse_from(["mstyle", "lint", "--changed", "src"]).is_err());
     }
 
     #[test]
