@@ -54,9 +54,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          output="$(sh scripts/install.sh --dry-run --version v0.2.0 --install-dir "$RUNNER_TEMP/mstyle-bin")"
+          output="$(sh scripts/install.sh --dry-run --version v0.3.0 --install-dir "$RUNNER_TEMP/mstyle-bin")"
           grep -F "asset=mstyle-linux-x86_64" <<< "$output"
-          musl_output="$(sh scripts/install.sh --dry-run --libc musl --version v0.2.0 --install-dir "$RUNNER_TEMP/mstyle-bin")"
+          musl_output="$(sh scripts/install.sh --dry-run --libc musl --version v0.3.0 --install-dir "$RUNNER_TEMP/mstyle-bin")"
           grep -Fx "asset=mstyle-linux-x86_64-musl" <<< "$musl_output"
 
       - name: Benchmark smoke
@@ -131,13 +131,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sh scripts/install.sh --dry-run --version v0.2.0 --install-dir "$RUNNER_TEMP/mstyle-bin"
+          sh scripts/install.sh --dry-run --version v0.3.0 --install-dir "$RUNNER_TEMP/mstyle-bin"
 
       - name: Windows installer smoke
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $output = & ./scripts/install.ps1 -DryRun -Version v0.2.0 -InstallDir "$env:RUNNER_TEMP\mstyle-bin"
+          $output = & ./scripts/install.ps1 -DryRun -Version v0.3.0 -InstallDir "$env:RUNNER_TEMP\mstyle-bin"
           if (-not ($output -match "asset=mstyle-windows-x86_64.exe")) {
               throw "installer dry-run did not resolve the Windows x86_64 asset"
           }
